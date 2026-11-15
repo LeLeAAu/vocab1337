@@ -83,6 +83,13 @@ vocab1337/
 
 ## 🤝 Đóng góp & Phát triển
 
+Kiểm thử hồi quy (không cần API key, micro hoặc tải mô hình Whisper):
+```bash
+python -m unittest discover -s tests -v
+```
+
+Xem [ghi chú rà soát và cải thiện](docs/review-2026-11-15.md) để biết các lỗi đã sửa, ảnh UI và phạm vi kiểm tra.
+
 1. Tạo branch mới cho tính năng hoặc bản sửa lỗi:
    ```bash
    git checkout -b feature/ten-tinh-nang

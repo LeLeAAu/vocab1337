@@ -51,11 +51,11 @@ SHADOW_MD  = ft.BoxShadow(offset=ft.Offset(8, 8),  blur_radius=0, color=TEXT_DAR
 SHADOW_LG  = ft.BoxShadow(offset=ft.Offset(12, 12), blur_radius=0, color=TEXT_DARK)
 
 NAV_ITEMS = [
-    ("dashboard", "🏠", "DASHBOARD"),
-    ("lessons",   "📚", "BÀI HỌC"),
-    ("random",    "🎲", "HỌC NGẪU NHIÊN"),
-    ("create",    "✨", "TẠO BÀI HỌC"),
-    ("settings",  "⚙", "CÀI ĐẶT"),
+    ("dashboard", ft.Icons.DASHBOARD_OUTLINED, "DASHBOARD"),
+    ("lessons",   ft.Icons.MENU_BOOK_ROUNDED, "BÀI HỌC"),
+    ("random",    ft.Icons.SHUFFLE_ROUNDED, "HỌC NGẪU NHIÊN"),
+    ("create",    ft.Icons.ADD_BOX_OUTLINED, "TẠO BÀI HỌC"),
+    ("settings",  ft.Icons.SETTINGS_OUTLINED, "CÀI ĐẶT"),
 ]
 
 
@@ -851,12 +851,12 @@ def build_dashboard(page: ft.Page, on_navigate) -> ft.Control:
     lesson_count = get_total_lesson_count()
     mastered     = get_mastered_count()
 
-    def stat_card(icon: str, value: str, lbl: str, border_c: str, on_click=None, tooltip: str = None) -> ft.Container:
+    def stat_card(icon: ft.IconData, value: str, lbl: str, border_c: str, on_click=None, tooltip: str = None) -> ft.Container:
         return ft.Container(
             content=ft.Column(
                 [
-                    ft.Text(icon, size=30),
-                    ft.Text(value, size=38, weight=ft.FontWeight.W_900, color=TEXT_DARK),
+                    ft.Icon(icon, size=26, color=border_c),
+                    ft.Text(value, size=34, weight=ft.FontWeight.W_900, color=TEXT_DARK),
                     ft.Container(height=2),
                     ft.Text(lbl.upper(), size=11, weight=ft.FontWeight.W_700, color=TEXT_GRAY, style=ft.TextStyle(letter_spacing=1.5)),
                 ],
@@ -865,8 +865,8 @@ def build_dashboard(page: ft.Page, on_navigate) -> ft.Control:
             ),
             bgcolor=BG_WHITE,
             border=mk_border(3, border_c),
-            shadow=ft.BoxShadow(offset=ft.Offset(6, 6), blur_radius=0, color=border_c),
-            padding=pad(h=28, v=26),
+            shadow=ft.BoxShadow(offset=ft.Offset(3, 3), blur_radius=0, color=border_c),
+            padding=pad(h=20, v=22),
             expand=True,
             on_click=on_click,
             ink=True if on_click else False,
@@ -876,16 +876,16 @@ def build_dashboard(page: ft.Page, on_navigate) -> ft.Control:
     tip_card = nb_card(
         ft.Row([
             ft.Container(
-                content=ft.Text("💡", size=18),
+                content=ft.Icon(ft.Icons.LIGHTBULB_OUTLINE_ROUNDED, size=22, color=TEXT_DARK),
                 bgcolor=CLR_YELLOW,
                 border=mk_border(2, TEXT_DARK),
                 padding=pad(all_=10),
             ),
             ft.Column([
-                ft.Text("BẮT ĐẦU", size=14, weight=ft.FontWeight.W_900, color=TEXT_DARK),
-                ft.Text("Chọn bài học từ danh sách hoặc luyện ngẫu nhiên để ghi nhớ từ vựng hiệu quả.", size=13, color=TEXT_GRAY),
+                ft.Text("TẠO BÀI HỌC ĐẦU TIÊN" if lesson_count == 0 else "TIẾP TỤC HỌC", size=14, weight=ft.FontWeight.W_900, color=TEXT_DARK),
+                ft.Text("Thêm từ vựng bằng tay, nhập JSON hoặc tạo bài học với AI." if lesson_count == 0 else "Ôn lại flashcard hoặc luyện đọc hiểu trong bài học của bạn.", size=13, color=TEXT_GRAY),
             ], spacing=4, expand=True),
-            nb_button("HỌC NGAY", on_click=lambda e: on_navigate("lessons"), bgcolor=TEXT_DARK, color=TEXT_WHITE)
+            nb_button("TẠO BÀI HỌC" if lesson_count == 0 else "HỌC NGAY", on_click=lambda e: on_navigate("create" if lesson_count == 0 else "lessons"), bgcolor=TEXT_DARK, color=TEXT_WHITE)
         ], spacing=16),
         shadow_size="sm",
     )
@@ -893,12 +893,12 @@ def build_dashboard(page: ft.Page, on_navigate) -> ft.Control:
     return ft.Column(
         [
             label_text("Tổng quan"),
-            heading_text("Dashboard"),
+            heading_text("Góc học tập"),
             ft.Container(height=1, bgcolor=TEXT_DARK, margin=marg(top=6, bottom=20)),
             ft.Row(
                 [
                     stat_card(
-                        "📖",
+                        ft.Icons.ABC_ROUNDED,
                         str(vocab_count),
                         "Từ vựng",
                         TEXT_DARK,
@@ -906,7 +906,7 @@ def build_dashboard(page: ft.Page, on_navigate) -> ft.Control:
                         tooltip="Xem danh sách từ vựng trong tất cả các bài học",
                     ),
                     stat_card(
-                        "📚",
+                        ft.Icons.MENU_BOOK_ROUNDED,
                         str(lesson_count),
                         "Bài học",
                         TEXT_DARK,
@@ -914,7 +914,7 @@ def build_dashboard(page: ft.Page, on_navigate) -> ft.Control:
                         tooltip="Chuyển sang màn hình Bài học",
                     ),
                     stat_card(
-                        "✅",
+                        ft.Icons.TASK_ALT_ROUNDED,
                         str(mastered),
                         "Đã thuộc",
                         "#166534",
@@ -1469,6 +1469,7 @@ def build_create_screen(page: ft.Page, on_success, on_lock_nav=None) -> ft.Contr
         border=mk_border(1, "#d1d5db"),
         padding=pad(h=12, v=10),
         width=280,
+        height=380,
     )
 
     manual_view = ft.Column([
@@ -1480,7 +1481,7 @@ def build_create_screen(page: ft.Page, on_success, on_lock_nav=None) -> ft.Contr
                 vocab_raw_inp,
                 ft.Container(height=10),
                 nb_button("Tạo bài học", on_click=submit_form, bgcolor=TEXT_DARK, color=TEXT_WHITE)
-            ], expand=True, spacing=10),
+            ], expand=True, spacing=10, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
             ft.VerticalDivider(width=1, color="#d1d5db"),
             vocab_preview,
         ], spacing=16, vertical_alignment=ft.CrossAxisAlignment.START)
@@ -1638,7 +1639,7 @@ def build_create_screen(page: ft.Page, on_success, on_lock_nav=None) -> ft.Contr
                 json_text_inp,
                 ft.Container(height=10),
                 nb_button("Nạp bài học bằng JSON", on_click=submit_json, bgcolor=TEXT_DARK, color=TEXT_WHITE)
-            ], expand=True),
+            ], expand=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
             ft.VerticalDivider(width=1, color=TEXT_DARK),
             json_guide
         ], spacing=20, vertical_alignment=ft.CrossAxisAlignment.START)
@@ -1700,9 +1701,9 @@ def build_create_screen(page: ft.Page, on_success, on_lock_nav=None) -> ft.Contr
                 except Exception:
                     pass
 
-    manual_btn = nb_button("NHẬP TAY ĐƠN GIẢN",     on_click=lambda e: switch_tab("manual"),   bgcolor=TEXT_DARK, color=TEXT_WHITE)
-    json_btn   = nb_button("DÁN FILE JSON CHUẨN",    on_click=lambda e: switch_tab("json"),     bgcolor=BG_WHITE, color=TEXT_DARK)
-    ai_btn     = nb_button("🤖 TỰ ĐỘNG TẠO BẰNG AI", on_click=lambda e: switch_tab("pipeline"), bgcolor=BG_WHITE, color=TEXT_DARK)
+    manual_btn = nb_button("NHẬP TAY", width=160,     on_click=lambda e: switch_tab("manual"),   bgcolor=TEXT_DARK, color=TEXT_WHITE)
+    json_btn   = nb_button("NHẬP JSON", width=160,    on_click=lambda e: switch_tab("json"),     bgcolor=BG_WHITE, color=TEXT_DARK)
+    ai_btn     = nb_button("TẠO BẰNG AI", width=180, on_click=lambda e: switch_tab("pipeline"), bgcolor=BG_WHITE, color=TEXT_DARK)
 
     tab_header = ft.Row([manual_btn, json_btn, ai_btn], spacing=10, wrap=True)
     is_mounted[0] = True
@@ -4189,7 +4190,7 @@ def build_reading_session(page: ft.Page, lesson_id: int, on_exit, shuffle: bool 
 # ══════════════════════════════════════════════════════════════════════════════
 
 def build_sidebar(current: str, on_navigate, on_open_logs=None) -> ft.Container:
-    def nav_item(route: str, icon: str, label: str) -> ft.Container:
+    def nav_item(route: str, icon: ft.IconData, label: str) -> ft.Container:
         active = route == current
 
         def on_hover(e):
@@ -4199,29 +4200,28 @@ def build_sidebar(current: str, on_navigate, on_open_logs=None) -> ft.Container:
 
         return ft.Container(
             content=ft.Row([
-                ft.Text(icon,  size=15),
+                ft.Icon(icon, size=20, color=TEXT_DARK if active else "#cbd5e1"),
                 ft.Text(label, size=12, weight=ft.FontWeight.W_800, color=TEXT_DARK if active else TEXT_WHITE),
             ], spacing=10),
             data=route,
             bgcolor=BG_WHITE if active else "transparent",
             border=mk_border(2, TEXT_DARK) if active else mk_border(0, "transparent"),
-            padding=pad(h=14, v=11),
-            shadow=SHADOW_SM if active else None,
+            padding=pad(h=16, v=13),
+            margin=marg(left=12, right=12),
             on_click=lambda e, r=route: on_navigate(r),
             on_hover=on_hover,
             ink=not active,
             animate=ft.Animation(100, ft.AnimationCurve.EASE_OUT),
         )
 
-    # Rainbow bar
+    # Thanh nhấn cố định; không giãn theo chiều cao sidebar.
     rainbow = ft.Container(
         gradient=ft.LinearGradient(
             begin=ft.Alignment(-1, 0),
             end=ft.Alignment(1, 0),
-            colors=["#ff0000","#ff7f00","#ffff00","#00ff00","#0000ff","#4b0082","#9400d3"],
+            colors=["#bfdbfe", "#c4b5fd", "#bbf7d0"],
         ),
         height=5,
-        expand=True,
     )
 
     return ft.Container(
@@ -4234,6 +4234,7 @@ def build_sidebar(current: str, on_navigate, on_open_logs=None) -> ft.Container:
                         ft.Text("1337",  size=24, weight=ft.FontWeight.W_900, color=CLR_YELLOW),
                     ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                     alignment=ft.Alignment(0, 0),
+                    padding=pad(top=26, bottom=12),
                 ),
                 ft.Container(height=20),
                 ft.Container(height=1, bgcolor="#374151"),
@@ -4243,7 +4244,7 @@ def build_sidebar(current: str, on_navigate, on_open_logs=None) -> ft.Container:
                 ft.Container(height=1, bgcolor="#374151"),
                 ft.Container(
                     content=ft.Row([
-                        ft.Text("📋", size=13),
+                        ft.Icon(ft.Icons.TERMINAL_ROUNDED, size=16, color="#cbd5e1"),
                         ft.Text("NHẬT KÝ HỆ THỐNG", size=10, weight=ft.FontWeight.W_800, color=TEXT_WHITE),
                     ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
                     bgcolor="#1f2937",

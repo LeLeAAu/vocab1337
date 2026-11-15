@@ -76,3 +76,11 @@
     </TASKS>
   </PHASE_4_OPTIMIZATION_AND_PACKAGING_REMAINING>
 </EXECUTION_PHASES_REMAINING>
+
+<CODING_REVIEW_2026_11_15>
+  - Sửa lỗi nút micro, bỏ kết quả phát âm giả khi thiếu model/micro hoặc lỗi nhận dạng.
+  - Chặn nộp kết quả cũ trong lúc ghi âm lại; tách và dọn tệp ghi âm tạm.
+  - Kiểm tra cấu trúc JSON trước khi nhập bài học; khử ID từ vựng trùng trong bài.
+  - Tinh gọn dashboard, sidebar và form tạo bài học; giữ phong cách Neubrutalism.
+  - Thêm 13 regression tests. Chi tiết, giới hạn kiểm tra và ảnh: docs/review-2026-11-15.md.
+</CODING_REVIEW_2026_11_15>

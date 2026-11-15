@@ -93,7 +93,7 @@ def show_pronunciation_modal(page: ft.Page, word: str, ipa: str = "", on_speak: 
         is_busy = True
         btn_record.disabled = True
         btn_record.bgcolor = "#9ca3af"
-        btn_record.content.controls[1].value = "ĐANG THU ÂM (3.5S)..."
+        btn_record.content.controls[-1].value = "ĐANG THU ÂM (3.5S)..."
         status_icon.value = "🔴"
         status_text.value = "Đang ghi âm... hãy phát âm to và rõ ràng"
         status_text.color = "#dc2626"
@@ -104,6 +104,11 @@ def show_pronunciation_modal(page: ft.Page, word: str, ipa: str = "", on_speak: 
             nonlocal is_busy
             try:
                 res = verify_voice_pronunciation(word, duration=3.5, threshold=2)
+                if res.get("error"):
+                    status_icon.value = "!"
+                    status_text.value = res["feedback"]
+                    status_text.color = "#92400e"
+                    return
                 passed = res.get("passed", False)
                 transcribed = res.get("transcribed_text", "")
                 dist = res.get("distance", 0)
@@ -133,7 +138,7 @@ def show_pronunciation_modal(page: ft.Page, word: str, ipa: str = "", on_speak: 
                 is_busy = False
                 btn_record.disabled = False
                 btn_record.bgcolor = TEXT_DARK
-                btn_record.content.controls[1].value = "🎙 NÓI LẠI (3.5S)"
+                btn_record.content.controls[-1].value = "🎙 NÓI LẠI (3.5S)"
                 try:
                     dlg.update()
                 except Exception:

@@ -941,10 +941,14 @@ def build_quiz_view(
         rec_btn = nb_button("🎙 BẮT ĐẦU NÓI (3.5S)", bgcolor=TEXT_DARK, color=TEXT_WHITE)
 
         def on_record_click(e):
-            if user_state.get("submitted"): return
+            if user_state.get("submitted") or user_state.get("speech_busy"): return
+            user_state["speech_busy"] = True
+            user_state["speech_recorded"] = False
+            user_state["speech_passed"] = False
+            user_state["speech_transcript"] = ""
             rec_btn.disabled = True
             rec_btn.bgcolor = "#9ca3af"
-            rec_btn.content.controls[1].value = "ĐANG THU ÂM (3.5S)..."
+            rec_btn.content.controls[-1].value = "ĐANG THU ÂM (3.5S)..."
             status_icon.value = "🔴"
             status_lbl.value = "Đang ghi âm... hãy phát âm to và rõ ràng"
             status_lbl.color = "#dc2626"
@@ -957,6 +961,11 @@ def build_quiz_view(
                     from audio_processor import verify_voice_pronunciation
                     thresh = int(question.get("threshold", 2))
                     res = verify_voice_pronunciation(target_text, duration=3.5, threshold=thresh)
+                    if res.get("error"):
+                        status_icon.value = "!"
+                        status_lbl.value = res["feedback"]
+                        status_lbl.color = "#92400e"
+                        return
                     passed = res.get("passed", False)
                     transcribed = res.get("transcribed_text", "")
 
@@ -985,9 +994,10 @@ def build_quiz_view(
                     status_lbl.value = f"Lỗi thu âm: {ex}"
                     status_lbl.color = "#991b1b"
                 finally:
+                    user_state["speech_busy"] = False
                     rec_btn.disabled = False
                     rec_btn.bgcolor = TEXT_DARK
-                    rec_btn.content.controls[1].value = "🎙 NÓI LẠI (3.5S)"
+                    rec_btn.content.controls[-1].value = "🎙 NÓI LẠI (3.5S)"
                     try:
                         rec_btn.update()
                         mic_status_row.update()
@@ -1008,6 +1018,8 @@ def build_quiz_view(
         workspace.controls.append(result_box)
 
         def submit_speech():
+            if user_state.get("speech_busy"):
+                return None, "Vui lòng chờ ghi âm và nhận dạng hoàn tất."
             if not user_state.get("speech_recorded"):
                 return None, "Vui lòng bấm nút ghi âm và phát âm từ trước khi nộp bài."
             passed = user_state.get("speech_passed", False)

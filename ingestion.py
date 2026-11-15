@@ -26,15 +26,21 @@ REQUIRED_VOCAB_FIELDS  = {"word"}
 def _validate_lesson(data: dict) -> list[str]:
     errors = []
     for field in REQUIRED_LESSON_FIELDS:
-        if not data.get(field):
+        if not isinstance(data.get(field), str) or not data[field].strip():
             errors.append(f"Lesson thiếu trường bắt buộc: '{field}'")
+    for field in ("questions", "flashcards"):
+        if field in data and (not isinstance(data[field], list) or
+                              any(not isinstance(item, dict) for item in data[field])):
+            errors.append(f"'{field}' phải là danh sách các object.")
     return errors
 
 
 def _validate_vocab(vocab: dict, index: int) -> list[str]:
+    if not isinstance(vocab, dict):
+        return [f"vocab[{index}]: phải là một object chứa trường 'word'."]
     errors = []
     for field in REQUIRED_VOCAB_FIELDS:
-        if not vocab.get(field):
+        if not isinstance(vocab.get(field), str) or not vocab[field].strip():
             errors.append(f"vocab[{index}]: thiếu trường bắt buộc '{field}'")
     return errors
 
@@ -143,8 +149,11 @@ def _ingest(data: dict | list) -> dict:
 
     # 2. Validate từng vocab item
     vocab_list = data.get("vocab", [])
-    for i, v in enumerate(vocab_list):
-        errors.extend(_validate_vocab(v, i))
+    if not isinstance(vocab_list, list):
+        errors.append("'vocab' phải là danh sách các object.")
+    else:
+        for i, v in enumerate(vocab_list):
+            errors.extend(_validate_vocab(v, i))
 
     if errors:
         return {"success": False, "lesson_id": None, "errors": errors}
@@ -158,7 +167,8 @@ def _ingest(data: dict | list) -> dict:
         vocab_ids: list[int] = []
         for v in vocab_list:
             vid = _insert_or_get_vocab(cursor, v)
-            vocab_ids.append(vid)
+            if vid not in vocab_ids:
+                vocab_ids.append(vid)
 
         # Chuẩn hóa story_state nếu có
         story_state_val = data.get("story_state")

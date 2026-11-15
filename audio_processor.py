@@ -4,10 +4,11 @@ Module xử lý giọng nói: ghi âm → Whisper → Levenshtein check.
 Tương thích và an toàn (fallback khi không tải được model AI).
 """
 
+import json
 import os
 import time
 import string
-import wave
+import tempfile
 
 from logger import get_logger
 
@@ -18,7 +19,7 @@ try:
     import sounddevice as sd
     import soundfile as sf
     SD_AVAILABLE = True
-except ImportError as _e:
+except (ImportError, OSError) as _e:
     SD_AVAILABLE = False
     logger.warning("Không thể import sounddevice/soundfile: %s", _e)
 
@@ -26,7 +27,7 @@ try:
     from faster_whisper import WhisperModel
     import Levenshtein
     AI_AVAILABLE = True
-except ImportError as _e:
+except (ImportError, OSError) as _e:
     AI_AVAILABLE = False
     logger.warning("Không thể import faster_whisper/Levenshtein: %s", _e)
 
@@ -41,6 +42,14 @@ def clean_text(text: str) -> str:
     return " ".join(text.split())
 
 
+def _unavailable(feedback: str) -> dict:
+    """Lỗi thiết bị/mô hình không phải là kết quả chấm điểm của người học."""
+    return {
+        "passed": False, "error": True, "transcribed_text": "",
+        "distance": None, "feedback": feedback,
+    }
+
+
 def check_pronunciation(
     audio_path: str,
     expected_text: str,
@@ -53,26 +62,17 @@ def check_pronunciation(
     """
     cleaned_expected = clean_text(expected_text)
 
+    if not cleaned_expected:
+        return _unavailable("Chưa có từ hoặc câu mẫu để kiểm tra.")
+
     if not AI_AVAILABLE:
-        logger.warning("AI không khả dụng (thiếu faster-whisper/Levenshtein). Chuyển sang Offline Mock mode.")
-        return {
-            "passed": True,
-            "transcribed_text": expected_text,
-            "distance": 0,
-            "feedback": "Chế độ offline/mock (Không cài faster-whisper hoặc Levenshtein)"
-        }
+        return _unavailable("Chưa thể chấm: cần cài faster-whisper và Levenshtein.")
 
     if not os.path.exists(audio_path):
         logger.warning("Không tìm thấy tệp âm thanh: %s", audio_path)
-        return {
-            "passed": False,
-            "transcribed_text": "",
-            "distance": len(cleaned_expected),
-            "feedback": f"Không tìm thấy tệp âm thanh: {audio_path}"
-        }
+        return _unavailable("Không tìm thấy bản ghi âm. Hãy thử ghi âm lại.")
 
     # Đọc cấu hình động từ settings.json
-    import json
     settings_model = model_size
     settings_device = device
     try:
@@ -86,15 +86,9 @@ def check_pronunciation(
 
     model, cuda_warning = get_whisper_model(settings_model, settings_device)
 
-    # Nếu không thể khởi động được model -> Fallback sang Offline Mock
+    # Không tự cho điểm khi mô hình không hoạt động.
     if model is None:
-        logger.warning("Không thể nạp WhisperModel. Chuyển sang Offline Mock mode.")
-        return {
-            "passed": True,
-            "transcribed_text": expected_text,
-            "distance": 0,
-            "feedback": "Offline Mock mode (Không thể nạp mô hình Whisper cục bộ)"
-        }
+        return _unavailable("Chưa thể nạp mô hình nhận dạng. Kiểm tra cấu hình và thử lại.")
 
     try:
         t0 = time.time()
@@ -107,7 +101,7 @@ def check_pronunciation(
 
         # Tính khoảng cách Levenshtein
         dist = Levenshtein.distance(cleaned_transcribed, cleaned_expected)
-        passed = (dist <= threshold)
+        passed = bool(cleaned_transcribed) and dist <= threshold
 
         logger.info(
             "Whisper nhận dạng xong (%.2fs): '%s' | Kỳ vọng: '%s' | Levenshtein: %d (ngưỡng: %d) -> %s",
@@ -125,12 +119,7 @@ def check_pronunciation(
 
     except Exception as e:
         logger.error("Lỗi xử lý nhận dạng giọng nói Whisper cho %s: %s", audio_path, e, exc_info=True)
-        return {
-            "passed": True,  # Cho qua nếu gặp lỗi thư viện
-            "transcribed_text": expected_text,
-            "distance": 0,
-            "feedback": f"Lỗi xử lý nhận dạng giọng nói: {str(e)}."
-        }
+        return _unavailable("Chưa thể nhận dạng bản ghi âm. Hãy thử lại; điểm chưa được ghi nhận.")
 
 
 _MODEL_CACHE = {}
@@ -177,55 +166,48 @@ def verify_voice_pronunciation(
 ) -> dict:
     """
     Quy trình trọn gói: Ghi âm từ mic -> Whisper transcribe -> Levenshtein check.
-    Trả về dict: {"passed": bool, "transcribed_text": str, "distance": int, "feedback": str}
+    Lỗi thiết bị/mô hình có error=True và distance=None; UI không chấm điểm lượt đó.
     """
     if on_status:
         try: on_status("recording", f"Đang ghi âm ({duration}s)...")
         except Exception: pass
 
-    if not output_wav:
+    temporary = output_wav is None
+    if temporary:
         cache_dir = os.path.join(os.path.dirname(__file__), "cache")
         os.makedirs(cache_dir, exist_ok=True)
-        output_wav = os.path.join(cache_dir, "temp_pronunciation.wav")
+        fd, output_wav = tempfile.mkstemp(suffix=".wav", dir=cache_dir)
+        os.close(fd)
 
-    record_audio(output_wav, duration=duration)
-
-    if on_status:
-        try: on_status("transcribing", "Đang nhận dạng giọng nói...")
-        except Exception: pass
-
-    res = check_pronunciation(output_wav, expected_text, threshold=threshold)
+    try:
+        record_audio(output_wav, duration=duration)
+        if on_status:
+            try: on_status("transcribing", "Đang nhận dạng giọng nói...")
+            except Exception: pass
+        res = check_pronunciation(output_wav, expected_text, threshold=threshold)
+    except Exception as exc:
+        logger.warning("Không thể ghi âm để kiểm tra: %s", exc)
+        res = _unavailable("Không thể ghi âm. Kiểm tra micro và quyền truy cập rồi thử lại.")
+    finally:
+        if temporary:
+            try:
+                os.remove(output_wav)
+            except OSError:
+                pass
 
     if on_status:
         try: on_status("done", res.get("feedback", ""))
         except Exception: pass
-
     return res
-
-
-def _create_silent_wav(output_path: str, duration: float = 3.5, sample_rate: int = 16000) -> str:
-    """Tạo tệp .wav chuẩn RIFF chứa dữ liệu im lặng (PCM 16-bit, mono, 16000Hz)."""
-    try:
-        num_samples = int(duration * sample_rate)
-        silence_bytes = b'\x00\x00' * num_samples
-        with wave.open(output_path, 'wb') as wf:
-            wf.setnchannels(1)            # Mono
-            wf.setsampwidth(2)            # 16-bit (2 bytes)
-            wf.setframerate(sample_rate)  # 16000 Hz
-            wf.writeframes(silence_bytes)
-    except Exception as e:
-        logger.error("Lỗi khi tạo silent wav %s: %s", output_path, e)
-    return output_path
 
 
 def record_audio(output_path: str, duration: float = 5.0, sample_rate: int = 16000) -> str:
     """
     Ghi âm từ mic trong `duration` giây và lưu ra file WAV (sample rate 16000Hz cho Whisper).
-    Nếu không có phần cứng mic hoặc thư viện, tạo tệp WAV im lặng hợp lệ để tránh làm crash thư viện giải mã.
+    Báo lỗi khi không ghi âm được; không thay lời nói bằng âm thanh giả.
     """
     if not SD_AVAILABLE:
-        logger.warning("sounddevice không khả dụng, tạo tệp wav im lặng: %s", output_path)
-        return _create_silent_wav(output_path, duration, sample_rate)
+        raise RuntimeError("Thư viện ghi âm không khả dụng.")
 
     try:
         logger.debug("Bắt đầu ghi âm micro: duration=%.1fs, rate=%d -> %s", duration, sample_rate, output_path)
@@ -244,6 +226,5 @@ def record_audio(output_path: str, duration: float = 5.0, sample_rate: int = 160
         logger.debug("Thu âm thành công, file size=%d bytes", sz)
         return output_path
     except Exception as e:
-        logger.error("Lỗi khi thu âm từ sounddevice: %s. Chuyển sang tạo silent wav.", e, exc_info=True)
-        # Fallback tạo file WAV im lặng chuẩn RIFF khi có lỗi phần cứng mic
-        return _create_silent_wav(output_path, duration, sample_rate)
+        logger.error("Lỗi khi thu âm từ sounddevice: %s", e, exc_info=True)
+        raise RuntimeError("Không thể thu âm từ micro.") from e

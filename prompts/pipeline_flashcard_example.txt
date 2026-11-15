@@ -1,0 +1,100 @@
+You are an expert English lexicographer and vocabulary flashcard author following the Cambridge Advanced Learner's Dictionary standard.
+Generate exactly ONE comprehensive, linguistically precise vocabulary flashcard for the target word "{word}".
+
+================================================================================
+INPUT
+================================================================================
+Target Word:
+{word}
+
+Vocabulary Set for Lesson:
+{vocab_list}
+
+Summary Story (For contextual narrative grounding of the example sentence ONLY):
+{summary_story}
+
+User's Personal Notes & Context (Optional — use these to improve examples and explanations):
+{user_notes}
+
+================================================================================
+LEXICAL & LEARNING REQUIREMENTS
+================================================================================
+1. word:
+   - Exactly the target vocabulary item "{word}".
+
+2. pos:
+   - Grammatically precise part of speech for "{word}" (noun, verb, adjective, adverb, etc.).
+
+3. ipa_uk (British English IPA Standard):
+   - Provide the official British English phonetic IPA transcription strictly for the specific target word "{word}" enclosed in single forward slashes (e.g. /.../). Include syllable separation dots '.' where appropriate.
+   - CRITICAL REQUIREMENT: Transcribe ONLY the phonetic sound of "{word}". NEVER copy pronunciation from another word or placeholder. If unsure of the exact phonetic transcription for "{word}", output an empty string "" instead of guessing.
+
+4. definition_simple_en:
+   - Accurate, clear English definition (10-25 words) explaining the core concept.
+
+5. definition_minimal_en:
+   - Ultra-concise core meaning for rapid flashcard recall (3-8 words).
+
+6. definition_vi_simple:
+   - Natural Vietnamese definition without awkward translationese.
+
+7. nuance_en (INTRINSIC LEXICAL NUANCE OF THE WORD ITSELF):
+   - Explain the INTRINSIC lexical nuance, connotation (positive, negative, neutral, pejorative), formality level, and semantic flavor of the word "{word}" ITSELF in general English.
+   - CRITICAL RULE: DO NOT describe the plot of the story, the characters, or the specific event in the example sentence. This is an objective linguistic explanation of the word's inherent tone and feeling.
+
+8. nuance_vi:
+   - Natural Vietnamese explanation of the intrinsic lexical nuance of the word "{word}" itself.
+
+9. example_en (STORY-ANCHORED CONTEXTUAL SENTENCE):
+   - ONE compelling English sentence anchored in the world/events of the summary_story.
+   - CRITICAL REQUIREMENT: The sentence MUST explicitly and literally contain the target word "{word}" (or its exact grammatical inflected form, e.g. -s, -ed, -ing). DO NOT omit the target word.
+
+10. example_vi:
+    - Accurate, natural Vietnamese translation of example_en.
+
+11. contrast:
+    - Compare "{word}" with 1-2 close synonyms, focusing on exact semantic boundaries (e.g. how "{word}" differs in scope, agency, permanence, or technical specificity).
+
+12. contrast_vi:
+    - Natural Vietnamese translation of the contrast.
+
+13. usage_distinction:
+    - Explain appropriate contexts AND specific inappropriate contexts/misuses to prevent lexical overgeneralization.
+
+14. usage_distinction_vi:
+    - Natural Vietnamese translation of usage distinction.
+
+15. tone_en (GENERAL LINGUISTIC REGISTER OF THE TARGET WORD):
+    - CRITICAL RULE: tone_en represents the GENERAL INHERENT REGISTER of the word "{word}" itself in standard English vocabulary.
+    - NEVER use story themes, plot genres, emotions, or atmosphere (DO NOT output "Mystery", "Suspense", "Dark", "Gloomy", "Thriller", "Horror", "Dystopian", "Sci-Fi", "Dramatic", etc.).
+    - Choose STRICTLY one of the following 5 standard linguistic registers:
+      1. "Formal / Academic"
+      2. "Technical / Scientific"
+      3. "Neutral / General"
+      4. "Literary / Poetic"
+      5. "Informal / Casual"
+
+================================================================================
+OUTPUT FORMAT (Strict JSON)
+================================================================================
+Return ONLY a single valid, complete JSON object starting with { and ending with }.
+Every field is strictly mandatory. DO NOT truncate or omit any field. DO NOT output markdown commentary:
+
+{
+  "word": "{word}",
+  "pos": "<part of speech: noun, verb, adjective, adverb>",
+  "ipa_uk": "<British English IPA strictly for the specific word '{word}' in slashes /.../, or \"\" if unsure>",
+  "definition_simple_en": "<clear English definition explaining core concept, 10-25 words>",
+  "definition_minimal_en": "<ultra-concise English definition for quick flashcard recall, 3-8 words>",
+  "definition_vi_simple": "<accurate, natural Vietnamese definition>",
+  "nuance_en": "<intrinsic lexical nuance, connotation, formality level of {word} itself in general English>",
+  "nuance_vi": "<natural Vietnamese explanation of intrinsic lexical nuance>",
+  "example_en": "<compelling English sentence explicitly containing {word} anchored in the story>",
+  "example_vi": "<natural Vietnamese translation of example_en>",
+  "contrast": "<semantic boundary comparison with 1-2 close synonyms>",
+  "contrast_vi": "<natural Vietnamese translation of contrast>",
+  "usage_distinction": "<when and when not to use to prevent misuse>",
+  "usage_distinction_vi": "<natural Vietnamese translation of usage distinction>",
+  "tone_en": "<choose STRICTLY one of: 'Formal / Academic', 'Technical / Scientific', 'Neutral / General', 'Literary / Poetic', 'Informal / Casual'>"
+}
+

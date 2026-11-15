@@ -1,0 +1,78 @@
+<SYSTEM_CONTEXT>
+  <PROJECT_NAME>Vocab1337</PROJECT_NAME>
+  <CORE_OBJECTIVE>
+    Xây dựng một ứng dụng học từ vựng tiếng Anh chạy hoàn toàn cục bộ, kết hợp bài học tự tạo, AI sinh câu hỏi ngẫu nhiên và kiểm tra phát âm.
+  </CORE_OBJECTIVE>
+  <ENVIRONMENT_SETUP>
+    <STATUS>Done</STATUS>
+    <COMPLETED>
+      - Đã tích hợp logic tự động kiểm tra và cài đặt các thư viện cần thiết dựa trên tệp requirements.txt trong `run.bat` khi khởi chạy ứng dụng.
+      - Đã cài đặt đầy đủ bộ thư viện xử lý âm thanh: sounddevice, soundfile, faster-whisper, Levenshtein.
+    </COMPLETED>
+  </ENVIRONMENT_SETUP>
+</SYSTEM_CONTEXT>
+
+<TECH_STACK>
+  <FRONTEND_BACKEND>Python + Flet (Neubrutalism UI)</FRONTEND_BACKEND>
+  <DATABASE>SQLite (Lưu trữ chính `brain_archive.db`), JSON (Định dạng nạp/xuất dữ liệu)</DATABASE>
+  <LOCAL_AI>
+    <TEXT_GENERATION>ollama-python (Hỗ trợ kèm OpenAI / Gemini trong Pipeline Studio & On-the-fly Challenge)</TEXT_GENERATION> 
+    <SPEECH_RECOGNITION>faster-whisper, python-Levenshtein, sounddevice/soundfile</SPEECH_RECOGNITION> 
+    <TEXT_TO_SPEECH>edge-tts</TEXT_TO_SPEECH>
+  </LOCAL_AI>
+</TECH_STACK>
+
+<EXECUTION_PHASES_REMAINING>
+  <!-- PHASE 1: Hoàn thành (DB schema, CRUD, Ingestion JSON/Form, Export Lesson JSON) -->
+  <PHASE_1_STORAGE_AND_INGESTION>
+    <STATUS>Done</STATUS>
+    <COMPLETED>
+      - Schema SQLite: Vocab, Lessons, Progress.
+      - Ingestion: Nạp bài học qua UI form hoặc dán mã JSON chuẩn.
+      - Export: Xuất bài học ra file .json chuẩn và hỗ trợ sao chép JSON vào Clipboard từ giao diện.
+    </COMPLETED>
+  </PHASE_1_STORAGE_AND_INGESTION>
+
+  <!-- PHASE 2: Hoàn thành toàn bộ UI Components & trọn bộ 10/10 dạng câu hỏi Quiz -->
+  <PHASE_2_UI_FRAMEWORK_AND_COMPONENTS>
+    <STATUS>Done</STATUS>
+    <COMPLETED>
+      - Flashcard đa chiều (Neubrutalism UI, flip beginner + active reflex, UK audio + Mic luyện phát âm).
+      - Reading Screen (Story context, điều hướng tuần tự, Master Challenge vàng kim).
+      - Quiz Renderer hỗ trợ trọn bộ 10 dạng câu hỏi:
+        1. single (contextual inference, causal reasoning,...)
+        2. multiple (multi-select deduction)
+        3. fill_blank
+        4. matching (distractors)
+        5. typing_exact
+        6. error_identification / incorrect_usage_detection
+        7. true_false
+        8. unscramble (ghép từ thành câu)
+        9. categorization (phân loại từ vựng)
+        10. speech_verification (thử thách phát âm qua micro và chấm điểm bằng Faster-Whisper)
+        + Master Challenge (Final Evaluation)
+      - Dashboard Stats Interaction:
+        + Bấm vào [số] từ vựng -> Hiển thị modal danh sách toàn bộ từ vựng trong tất cả các bài học (kèm tìm kiếm, lọc theo bài, sắp xếp, nghe phát âm và chi tiết ranh giới ngữ nghĩa).
+        + Bấm vào [số] bài học -> Chuyển tab sang màn hình Bài Học.
+        + Bấm vào [số từ vựng] đã thuộc -> Hiển thị modal danh sách các từ vựng đã thuộc (Score >= 6) trong tất cả các bài học.
+    </COMPLETED>
+  </PHASE_2_UI_FRAMEWORK_AND_COMPONENTS>
+
+  <!-- PHASE 3: Module AI Text Generation và Speech Processing đã tích hợp hoàn chỉnh -->
+  <PHASE_3_LOCAL_AI_INTEGRATION>
+    <STATUS>Done</STATUS>
+    <COMPLETED>
+      - AI Pipeline Studio 13 bước tạo bài học bám sát cốt truyện.
+      - Thử thách ngẫu nhiên On-the-fly (`⚡ Thử thách AI`) trực tiếp trong màn hình Đọc hiểu.
+      - Module Speech Processing: Thu âm qua Micro (sounddevice), nhận dạng giọng nói (faster-whisper với model caching và GPU CUDA fallback), chấm điểm sai lệch ký tự (Levenshtein) trên cả Flashcard và Quiz.
+    </COMPLETED>
+  </PHASE_3_LOCAL_AI_INTEGRATION>
+
+  <!-- PHASE 4: Đóng gói sản phẩm duy nhất -->
+  <PHASE_4_OPTIMIZATION_AND_PACKAGING_REMAINING>
+    <STATUS>Pending</STATUS>
+    <TASKS>
+      - Đóng gói toàn bộ mã nguồn ứng dụng, cấu hình, file âm thanh/prompts và cơ sở dữ liệu SQLite thành một tệp thực thi duy nhất (.exe) cho người dùng cuối.
+    </TASKS>
+  </PHASE_4_OPTIMIZATION_AND_PACKAGING_REMAINING>
+</EXECUTION_PHASES_REMAINING>

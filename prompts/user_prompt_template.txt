@@ -1,0 +1,5 @@
+Hãy sinh một bài học mới.
+Cốt truyện gốc: "{story_context}"
+Danh sách từ vựng cần tích hợp: {vocab_names}
+Hãy sinh ra {num_questions} câu hỏi đọc hiểu đa dạng thuộc các loại (single, multiple, fill_blank, matching, true_false).
+Yêu cầu trả về đúng cấu trúc JSON chuẩn.

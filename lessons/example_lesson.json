@@ -1,0 +1,277 @@
+{
+  "title": "The Last Forest",
+  "story_context": "In the dense Amazon rainforest, scientists discover that rapid deforestation has pushed countless species to the brink of extinction. A team of researchers race against time to document the fragile ecosystem before it vanishes forever.",
+  "vocab": [
+    {
+      "word": "deforestation",
+      "pos": "noun",
+      "ipa": "/diːˌfɒr.ɪˈsteɪ.ʃən/",
+      "definition_full_en": "The action of clearing a wide area of trees permanently, often for agricultural or industrial use.",
+      "definition_short_en": "Permanent removal of forests.",
+      "definition_vi": "Nạn phá rừng",
+      "nuance_en": "Carries a strong negative connotation — implies irreversible large-scale destruction, often driven by human activity.",
+      "nuance_vi": "Mang hàm ý tiêu cực mạnh — ám chỉ sự tàn phá quy mô lớn, thường do con người gây ra.",
+      "example_en": "Deforestation in the Amazon has accelerated dramatically over the past decade, threatening the entire ecosystem.",
+      "example_vi": "Nạn phá rừng ở Amazon đã tăng tốc đáng kể trong thập kỷ qua, đe dọa toàn bộ hệ sinh thái.",
+      "related_words": "reforestation (trái nghĩa), logging, land clearance",
+      "related_words_vi": "reforestation (trồng rừng — trái nghĩa); logging (khai thác gỗ, không nhất thiết vĩnh viễn).",
+      "usage_note": "Common collocations: 'rapid deforestation', 'halt deforestation', 'illegal deforestation', 'deforestation rate'.",
+      "tone": "Academic / Formal"
+    },
+    {
+      "word": "ecosystem",
+      "pos": "noun",
+      "ipa": "/ˈiː.kəʊˌsɪs.təm/",
+      "definition_full_en": "A biological community of interacting organisms and their physical environment, functioning as a system.",
+      "definition_short_en": "A community of organisms and their environment.",
+      "definition_vi": "Hệ sinh thái",
+      "nuance_en": "Can refer to both natural systems (rainforest ecosystem) and metaphorical ones (startup ecosystem, tech ecosystem).",
+      "nuance_vi": "Dùng cho cả hệ thống tự nhiên lẫn nghĩa bóng (hệ sinh thái khởi nghiệp, hệ sinh thái công nghệ).",
+      "example_en": "The Amazon rainforest is one of the most complex and biodiverse ecosystems on Earth.",
+      "example_vi": "Rừng nhiệt đới Amazon là một trong những hệ sinh thái phức tạp và đa dạng sinh học nhất trên Trái Đất.",
+      "related_words": "ecology, biome, habitat, biodiversity",
+      "related_words_vi": "ecology (sinh thái học); biome (quần xã sinh địa); habitat (môi trường sống); biodiversity (đa dạng sinh học).",
+      "usage_note": "Collocates: 'fragile ecosystem', 'restore an ecosystem', 'protect the ecosystem', 'ecosystem services'.",
+      "tone": "Academic / Neutral"
+    },
+    {
+      "word": "extinction",
+      "pos": "noun",
+      "ipa": "/ɪkˈstɪŋk.ʃən/",
+      "definition_full_en": "The state or process of a species, family, or larger group being or becoming extinct — permanently gone from the Earth.",
+      "definition_short_en": "The permanent dying out of a species.",
+      "definition_vi": "Sự tuyệt chủng",
+      "nuance_en": "Emphasizes permanence and irreversibility — once a species is extinct, it cannot be recovered.",
+      "nuance_vi": "Nhấn mạnh tính vĩnh viễn và không thể đảo ngược — một khi loài đã tuyệt chủng, không thể phục hồi.",
+      "example_en": "Scientists warn that over one million species face extinction due to rapid habitat loss caused by deforestation.",
+      "example_vi": "Các nhà khoa học cảnh báo hơn một triệu loài đang đối mặt với nguy cơ tuyệt chủng do mất môi trường sống vì nạn phá rừng.",
+      "related_words": "extinct (adj.), endangered, threatened, critically endangered",
+      "related_words_vi": "extinct: đã tuyệt chủng; endangered: đang nguy cấp; threatened: bị đe dọa; critically endangered: cực kỳ nguy cấp.",
+      "usage_note": "Key phrases: 'on the brink of extinction', 'face extinction', 'prevent extinction', 'mass extinction event'.",
+      "tone": "Formal / Academic"
+    }
+  ],
+  "questions": [
+    {
+      "type": "single",
+      "instruction": "Chọn 1 đáp án đúng nhất",
+      "contextual_text": "Scientists in the Amazon discovered that rapid deforestation has pushed countless species to the brink of extinction.",
+      "question": "What does 'deforestation' mean in the context above?",
+      "options": [
+        "The process of planting new trees in a cleared area",
+        "The permanent removal of forests from a large area",
+        "A sustainable logging method used by local communities",
+        "The natural process of forest renewal after wildfires"
+      ],
+      "correct_index": 1,
+      "explanation": "'Deforestation' = the permanent clearing of forests. Option A describes 'reforestation' (its opposite). Option C describes sustainable logging (not permanent). Option D is a natural process unrelated to human activity."
+    },
+    {
+      "type": "true_false",
+      "instruction": "Đánh giá tính Đúng/Sai",
+      "contextual_text": "The Amazon rainforest is one of the most complex ecosystems on Earth.",
+      "question": "Nhận định sau đây là Đúng (True) hay Sai (False)?",
+      "statement": "The word 'ecosystem' can only be used to describe natural environments, never in a metaphorical context.",
+      "is_true": false,
+      "explanation": "False. 'Ecosystem' is commonly used metaphorically — e.g., 'startup ecosystem', 'digital ecosystem', 'business ecosystem'."
+    },
+    {
+      "type": "fill_blank",
+      "instruction": "Điền từ vào chỗ trống",
+      "contextual_text": "Researchers warn that the jaguar is on the brink of [blank] due to rapid habitat loss in the Amazon.",
+      "question": "Từ nào phù hợp nhất với ngữ cảnh trên?",
+      "options": ["extinction", "deforestation", "ecosystem", "degradation"],
+      "correct_index": 0,
+      "explanation": "'On the brink of extinction' is the correct collocation, meaning dangerously close to dying out permanently. The other words don't fit the 'on the brink of ___' pattern in this context."
+    },
+    {
+      "type": "unscramble",
+      "instruction": "Sắp xếp từ thành câu",
+      "contextual_text": "",
+      "question": "Sắp xếp các khối từ sau để tạo thành một câu hoàn chỉnh có nghĩa:",
+      "fragments": ["the entire ecosystem", "threatened", "Deforestation", "in the Amazon", "has"],
+      "correct_order": [2, 3, 4, 1, 0],
+      "explanation": "Câu hoàn chỉnh: 'Deforestation in the Amazon has threatened the entire ecosystem.' Cấu trúc: Chủ ngữ (Deforestation in the Amazon) + Động từ (has threatened) + Tân ngữ (the entire ecosystem)."
+    },
+    {
+      "type": "matching",
+      "instruction": "Nối các cặp tương ứng",
+      "contextual_text": "",
+      "question": "Nối từ vựng với định nghĩa đúng của chúng.",
+      "pairs": [
+        { "id": 1, "left": "deforestation", "right": "Permanent large-scale removal of forests" },
+        { "id": 2, "left": "ecosystem",     "right": "A community of organisms and their environment" },
+        { "id": 3, "left": "extinction",    "right": "The permanent dying out of a species" }
+      ],
+      "distractors": [
+        "The process of replanting trees in cleared areas",
+        "A sustainable method of harvesting timber"
+      ],
+      "explanation": "deforestation = removal of forests; ecosystem = community of organisms + environment; extinction = permanent loss of a species."
+    }
+  ],
+  "flashcards": [
+    {
+      "vocab_word": "deforestation",
+      "front": [
+        {
+          "challenge_type": "basic_recognition",
+          "instruction": "Nhìn từ vựng và nhớ lại định nghĩa",
+          "display_content": {
+            "main_text": "deforestation",
+            "sub_text": "noun",
+            "audio_trigger": false,
+            "requires_input": false,
+            "expected_input": null
+          }
+        },
+        {
+          "challenge_type": "reverse_recall",
+          "instruction": "Đọc định nghĩa và đoán từ",
+          "display_content": {
+            "main_text": "The permanent removal of forests, often driven by agricultural or industrial expansion in the Amazon.",
+            "sub_text": "Gợi ý: Bắt đầu bằng 'd', kết thúc bằng 'tion'",
+            "audio_trigger": false,
+            "requires_input": false,
+            "expected_input": null
+          }
+        },
+        {
+          "challenge_type": "blind_typing",
+          "instruction": "Nghe phát âm và gõ lại chính xác từ vựng",
+          "display_content": {
+            "main_text": "The permanent removal of forests from a large area.",
+            "sub_text": "Click 🔊 để nghe phát âm",
+            "audio_trigger": true,
+            "requires_input": true,
+            "expected_input": "deforestation"
+          }
+        }
+      ],
+      "back": {
+        "word": "deforestation",
+        "pos": "noun",
+        "ipa": "/diːˌfɒr.ɪˈsteɪ.ʃən/",
+        "definition_full_en": "The action of clearing a wide area of trees permanently.",
+        "definition_short_en": "Permanent removal of forests.",
+        "definition_vi": "Nạn phá rừng",
+        "nuance_en": "Implies irreversible, large-scale human-driven destruction.",
+        "nuance_vi": "Hàm ý phá hủy quy mô lớn, không thể đảo ngược, do con người gây ra.",
+        "example_en": "Deforestation in the Amazon has threatened the entire ecosystem.",
+        "example_vi": "Nạn phá rừng ở Amazon đã đe dọa toàn bộ hệ sinh thái.",
+        "related_words": "reforestation, logging, land clearance",
+        "related_words_vi": "reforestation (trồng rừng); logging (khai thác gỗ).",
+        "usage_note": "'rapid deforestation', 'halt deforestation', 'illegal deforestation'.",
+        "tone": "Academic / Formal"
+      }
+    },
+    {
+      "vocab_word": "ecosystem",
+      "front": [
+        {
+          "challenge_type": "basic_recognition",
+          "instruction": "Nhìn từ vựng và nhớ lại định nghĩa",
+          "display_content": {
+            "main_text": "ecosystem",
+            "sub_text": "noun",
+            "audio_trigger": false,
+            "requires_input": false,
+            "expected_input": null
+          }
+        },
+        {
+          "challenge_type": "reverse_recall",
+          "instruction": "Đọc định nghĩa và đoán từ",
+          "display_content": {
+            "main_text": "A biological community of interacting organisms and their physical environment, like the Amazon rainforest.",
+            "sub_text": "Gợi ý: Bắt đầu bằng 'eco', kết thúc bằng 'tem'",
+            "audio_trigger": false,
+            "requires_input": false,
+            "expected_input": null
+          }
+        },
+        {
+          "challenge_type": "blind_typing",
+          "instruction": "Nghe phát âm và gõ lại chính xác từ vựng",
+          "display_content": {
+            "main_text": "A community of organisms and their environment.",
+            "sub_text": "Click 🔊 để nghe phát âm",
+            "audio_trigger": true,
+            "requires_input": true,
+            "expected_input": "ecosystem"
+          }
+        }
+      ],
+      "back": {
+        "word": "ecosystem",
+        "pos": "noun",
+        "ipa": "/ˈiː.kəʊˌsɪs.təm/",
+        "definition_full_en": "A biological community of interacting organisms and their physical environment.",
+        "definition_short_en": "A community of organisms and their environment.",
+        "definition_vi": "Hệ sinh thái",
+        "nuance_en": "Used for both natural systems and metaphorical ones (startup ecosystem).",
+        "nuance_vi": "Dùng cho cả hệ thống tự nhiên lẫn nghĩa bóng.",
+        "example_en": "The Amazon is one of the most complex ecosystems on Earth.",
+        "example_vi": "Amazon là một trong những hệ sinh thái phức tạp nhất Trái Đất.",
+        "related_words": "ecology, biome, habitat, biodiversity",
+        "related_words_vi": "ecology (sinh thái học); biome (quần xã sinh địa); habitat (môi trường sống).",
+        "usage_note": "'fragile ecosystem', 'restore/protect an ecosystem', 'ecosystem services'.",
+        "tone": "Academic / Neutral"
+      }
+    },
+    {
+      "vocab_word": "extinction",
+      "front": [
+        {
+          "challenge_type": "basic_recognition",
+          "instruction": "Nhìn từ vựng và nhớ lại định nghĩa",
+          "display_content": {
+            "main_text": "extinction",
+            "sub_text": "noun",
+            "audio_trigger": false,
+            "requires_input": false,
+            "expected_input": null
+          }
+        },
+        {
+          "challenge_type": "reverse_recall",
+          "instruction": "Đọc định nghĩa và đoán từ",
+          "display_content": {
+            "main_text": "The permanent, irreversible dying out of a species — like what the jaguar faces due to Amazon deforestation.",
+            "sub_text": "Gợi ý: Bắt đầu bằng 'ex', kết thúc bằng 'tion'",
+            "audio_trigger": false,
+            "requires_input": false,
+            "expected_input": null
+          }
+        },
+        {
+          "challenge_type": "blind_typing",
+          "instruction": "Nghe phát âm và gõ lại chính xác từ vựng",
+          "display_content": {
+            "main_text": "The permanent dying out of a species.",
+            "sub_text": "Click 🔊 để nghe phát âm",
+            "audio_trigger": true,
+            "requires_input": true,
+            "expected_input": "extinction"
+          }
+        }
+      ],
+      "back": {
+        "word": "extinction",
+        "pos": "noun",
+        "ipa": "/ɪkˈstɪŋk.ʃən/",
+        "definition_full_en": "The state or process of a species becoming permanently extinct.",
+        "definition_short_en": "The permanent dying out of a species.",
+        "definition_vi": "Sự tuyệt chủng",
+        "nuance_en": "Emphasizes permanence and irreversibility.",
+        "nuance_vi": "Nhấn mạnh tính vĩnh viễn và không thể đảo ngược.",
+        "example_en": "Over one million species face extinction due to rapid deforestation.",
+        "example_vi": "Hơn một triệu loài đang đối mặt nguy cơ tuyệt chủng do nạn phá rừng.",
+        "related_words": "extinct (adj.), endangered, threatened, critically endangered",
+        "related_words_vi": "extinct: đã tuyệt chủng; endangered: đang nguy cấp; threatened: bị đe dọa.",
+        "usage_note": "'on the brink of extinction', 'face extinction', 'mass extinction event'.",
+        "tone": "Formal / Academic"
+      }
+    }
+  ]
+}

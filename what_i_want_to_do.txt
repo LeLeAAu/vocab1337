@@ -1,0 +1,5 @@
+------------------------------- CÁC PHẦN CHƯA LÀM / CHƯA LÀM ĐẾN (REMAINING IDEAS & TASKS) -------------------------------
+
+
+2. ĐÓNG GÓI ỨNG DỤNG THÀNH TỆP THỰC THI DUY NHẤT (.EXE) <Dừng vô thời hạn cho đến khi hoàn thiện app>:
+   - Đóng gói toàn bộ mã nguồn ứng dụng, giao diện Flet, dữ liệu SQLite (brain_archive.db), các mô hình và cấu hình thành một file thực thi duy nhất (.exe) cho người dùng cuối chạy độc lập không cần cài đặt Python thủ công.

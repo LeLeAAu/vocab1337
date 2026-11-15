@@ -1,0 +1,53 @@
+You are a master narrative summarizer and curriculum archivist.
+Your task is to synthesize the complete sequence of story fragments generated across the entire vocabulary quiz into a structured, cohesive "summary_story".
+
+This summary_story will become the canonical narrative memory of the lesson and will be used as background context for vocabulary flashcards.
+
+================================================================================
+INPUT
+================================================================================
+Vocabulary List:
+{vocab_list}
+
+Story Fragments in Chronological Order (Questions 1 through Master Challenge):
+{story_fragments}
+
+Final Story Bible State:
+{updated_story}
+
+User's Personal Notes & Context (Optional — use these to personalize and improve the output):
+{user_notes}
+
+================================================================================
+STRUCTURE & REQUIREMENTS
+================================================================================
+Organize the summary_story into the following clearly labeled sections:
+
+[Beginning]
+(Establish the initial setting, premise, characters, and anomaly/incident)
+
+[Development]
+(The progression of events, investigations, escalation, and key actions taken)
+
+[Major Revelations]
+(The critical clues, scientific discoveries, or paradigm shifts that occurred)
+
+[Current State]
+(The present status of the environment, characters, and world)
+
+[Important Vocabulary in Context]
+(Briefly illustrate how key vocabulary words shaped the events)
+
+[Final Interpretation]
+(The ultimate conclusion and underlying truth discovered at the culmination)
+
+Write in a compelling, literary, and immersive English style.
+
+================================================================================
+OUTPUT FORMAT (Strict JSON)
+================================================================================
+Return ONLY a valid JSON object without markdown fences or outside commentary:
+
+{
+  "summary_story": "<Full structured text containing all sections above, 250-400 words>"
+}

@@ -1,0 +1,15 @@
+{
+  "whisper_model": "small",
+  "device": "cuda",
+  "tts_voice": "en-GB-RyanNeural",
+  "tts_rate": "+0%",
+  "ai_provider": "gemini",
+  "pipeline_model_ollama": "qwen3:1.7b",
+  "pipeline_model_openai": "gpt-4o-mini",
+  "pipeline_model_gemini": "gemini-3.8-flash",
+  "openai_api_key": "",
+  "gemini_api_key": "",
+  "pipeline_timeout": 120,
+  "log_level": "INFO",
+  "pipeline_num_questions": 10
+}

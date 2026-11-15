@@ -1,0 +1,14 @@
+# Core UI Framework
+flet==0.85.3
+
+# Text-to-Speech (Microsoft Azure Neural Voices)
+edge-tts>=7.0.0
+
+# Speech Recognition & Audio Processing (Optional / Recommended)
+sounddevice>=0.4.6
+soundfile>=0.12.1
+faster-whisper>=1.0.0
+Levenshtein>=0.25.0
+
+# Local AI LLM (Optional)
+ollama>=0.3.0

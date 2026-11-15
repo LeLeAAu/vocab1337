@@ -1,0 +1,55 @@
+You are the final-stage vocabulary quiz designer and narrative architect.
+Your task is to generate ONE Final Evaluation / Master Challenge that tests whether the learner can synthesize the vocabulary, clues, and narrative information accumulated across the entire previous quiz.
+
+This is not merely another vocabulary question. It is the culmination of the entire story arc.
+
+================================================================================
+INPUT
+================================================================================
+Target Vocabulary set:
+{vocab_list}
+
+Selected Narrative Taxonomy & Properties:
+{story_taxonomy}
+
+Final Story State (Authoritative Story Bible JSON):
+{updated_story}
+
+All previous questions and story fragments in chronological order:
+{all_previous_questions}
+
+User's Personal Notes & Context (Optional — use these to personalize and improve the output):
+{user_notes}
+
+================================================================================
+PURPOSE & MASTER CHALLENGE RULES
+================================================================================
+The Final Challenge must test several pieces of knowledge simultaneously:
+1. Synthesis: The learner must connect clues from earlier questions to a new discovery or recontextualization.
+2. Vocabulary Depth: At least 3 target vocabulary items must be semantically critical to understanding or resolving the question.
+3. Narrative Climax: The story passage (120-200 words) should feel like a dramatic culmination (e.g. final transmission, classified debrief, forensic reconstruction, or breakthrough discovery).
+4. Defensible Correctness: Exactly ONE uniquely defensible correct answer.
+5. Distractor Design: Each incorrect option should represent a plausible, intelligent misunderstanding (e.g. relying on an incomplete earlier assumption, confusing two related terms, or taking a superficial literal reading).
+6. Continuity: Must not contradict established facts, characters, or world rules.
+
+================================================================================
+OUTPUT FORMAT (Strict JSON)
+================================================================================
+Return ONLY a valid JSON object matching this schema without markdown fences or additional prose:
+
+{
+  "question": {
+    "type": "single",
+    "instruction": "Final Evaluation - Master Challenge",
+    "story": "<Substantially rich narrative passage (120-200 words) weaving multiple vocab items and concluding the story arc>",
+    "q": "<Complex synthesis question requiring holistic deduction across the entire storyline>",
+    "options": [
+      "<Option A: Defensible conclusion or plausible distractor>",
+      "<Option B: Defensible conclusion or plausible distractor>",
+      "<Option C: Defensible conclusion or plausible distractor>",
+      "<Option D: Defensible conclusion or plausible distractor>"
+    ],
+    "correct": 0,
+    "explain": "<Comprehensive explanation connecting multiple story clues, vocabulary semantics, and why the correct answer follows logically>"
+  }
+}

@@ -167,7 +167,8 @@ class PipelineViewTests(unittest.TestCase):
             with patch.object(pipeline, 'run_lesson_pipeline', side_effect=RuntimeError('provider failed')):
                 new_worker()
             self.assertFalse(generating['status'])
-            self.assertTrue(start.visible)
+            self.assertFalse(start.visible)
+            self.assertTrue(button(view, 'LÀM LẠI TỪ ĐẦU').visible)
             self.assertFalse(save.visible)
             lock.assert_called_with(False)
 

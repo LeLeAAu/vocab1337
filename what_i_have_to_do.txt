@@ -92,3 +92,10 @@
   - Bổ sung bố cục nhỏ cho shell/form tạo bài học và phát âm thanh trên web.
   - 31 tests; bằng chứng và giới hạn: docs/improvements-round-2.md.
 </CODING_REVIEW_2026_11_15_ROUND_2>
+
+<AI_PIPELINE_RETRY>
+  - Thêm lựa chọn thử lại bước lỗi và tiếp tục hoặc làm lại từ đầu.
+  - Giữ câu hỏi, story state, Master Challenge, summary và từng flashcard đã hoàn thành trong phiên tạo bài học.
+  - Cho phép đổi model/API key khi thử lại; không trộn nội dung mới với tiến trình cũ.
+  - 48 tests; hướng dẫn và phạm vi: docs/pipeline-retry.md.
+</AI_PIPELINE_RETRY>

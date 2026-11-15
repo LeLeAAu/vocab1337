@@ -7,6 +7,7 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 import json
+from copy import deepcopy
 import random
 import threading
 import flet as ft
@@ -1577,7 +1578,12 @@ def build_pipeline_tab_content(page: ft.Page, on_success, on_lock_nav=None, is_g
         "running": False,
         "stop_event": None,
         "result": None,
+        "checkpoint": None,
+        "request": None,
+        "title": "",
     }
+
+    run_lock = threading.RLock()
 
     # ── Inputs ───────────────────────────────────────────────────────────────
     pl_settings = load_settings()
@@ -2079,6 +2085,11 @@ def build_pipeline_tab_content(page: ft.Page, on_success, on_lock_nav=None, is_g
 
     # ── Buttons ───────────────────────────────────────────────────────────────
     pl_start_btn  = nb_button("▶ Bắt đầu tạo bài học", bgcolor=TEXT_DARK, color=TEXT_WHITE)
+    pl_retry_btn = nb_button("Thử lại bước bị lỗi", bgcolor=CLR_YELLOW, color=TEXT_DARK, width=220)
+    pl_restart_btn = nb_button("Làm lại từ đầu", bgcolor=BG_WHITE, color=TEXT_DARK, width=180)
+    pl_retry_btn.visible = pl_restart_btn.visible = False
+    pl_resume_note = ft.Text("", size=12, color=TEXT_GRAY, visible=False)
+    pl_failure_detail = ft.Text("", size=12, color="#991b1b", visible=False)
     pl_cancel_btn = nb_button("✕ Hủy", bgcolor=CLR_RED, color=TEXT_DARK)
     pl_cancel_btn.visible = False
     pl_save_btn   = nb_button("💾 Lưu bài học vào DB", bgcolor=CLR_GREEN, color=TEXT_DARK)
@@ -2092,7 +2103,8 @@ def build_pipeline_tab_content(page: ft.Page, on_success, on_lock_nav=None, is_g
         status = info.get("status", "running")
 
         if total > 0 and step > 0:
-            pct = min(step / total, 1.0)
+            fraction = 1 if status in ("done", "step_done") else info.get("sub_progress", 0)
+            pct = min(((step - 1) + fraction) / total, 1.0)
             pl_progress_bar.value = pct
             try:
                 pl_progress_bar.update()
@@ -2112,26 +2124,7 @@ def build_pipeline_tab_content(page: ft.Page, on_success, on_lock_nav=None, is_g
         _add_log(label, level)
 
     # ── Start pipeline ────────────────────────────────────────────────────────
-    def do_start(e=None):
-        if pipeline_state["running"]:
-            return
-        pl_error_txt.value = ""
-
-        vocab_raw = (pl_vocab_inp.value or "").strip()
-        if not vocab_raw:
-            pl_error_txt.value = "Vui lòng nhập danh sách từ vựng."
-            page.update()
-            return
-
-        try:
-            num_q = int((pl_nq_inp.value or "").strip())
-            if not (1 <= num_q <= 20):
-                raise ValueError
-        except ValueError:
-            pl_error_txt.value = "Số câu hỏi phải là số nguyên từ 1 đến 20."
-            page.update()
-            return
-
+    def connection_options(num_q):
         # Phân tích Model đã chọn từ Dropdown
         selected_val = pl_model_dropdown.value or "ollama:qwen3:4b"
         if selected_val == "custom:custom":
@@ -2160,6 +2153,32 @@ def build_pipeline_tab_content(page: ft.Page, on_success, on_lock_nav=None, is_g
         save_settings(s)
 
         timeout = s.get("pipeline_timeout", 120)
+
+        return dict(provider=provider, model=model, api_key=api_key, timeout=timeout)
+
+    def do_start(e=None):
+        if pipeline_state["running"]:
+            return
+        pl_error_txt.value = ""
+
+        vocab_raw = (pl_vocab_inp.value or "").strip()
+        if not vocab_raw:
+            pl_error_txt.value = "Vui lòng nhập danh sách từ vựng."
+            page.update()
+            return
+
+        try:
+            num_q = int((pl_nq_inp.value or "").strip())
+            if not (1 <= num_q <= 20):
+                raise ValueError
+        except ValueError:
+            pl_error_txt.value = "Số câu hỏi phải là số nguyên từ 1 đến 20."
+            page.update()
+            return
+
+        connection = connection_options(num_q)
+        if connection is None:
+            return
 
         vocab_list = [{"word": w.strip()} for w in vocab_raw.split(",") if w.strip()]
         seed_story = (pl_story_inp.value or "").strip() or "Academic English reading lesson."
@@ -2193,116 +2212,150 @@ def build_pipeline_tab_content(page: ft.Page, on_success, on_lock_nav=None, is_g
         if _is_custom(pl_preset_dropdown.value) and custom_preset_name:
             taxonomy_settings["story_style"] = custom_preset_name
 
-        # Cập nhật số bước tương ứng với số câu hỏi (num_q + 3 bước: Challenge, Summary, Flashcard)
-        total_steps = num_q + 3
-        _rebuild_step_dots(total_steps)
+        if not vocab_list:
+            pl_error_txt.value = "Vui lòng nhập ít nhất một từ vựng."
+            page.update()
+            return
+        user_notes = (pl_notes_inp.value or "").strip()
+        request = dict(vocab_list=vocab_list, seed_story=seed_story, num_questions=num_q,
+                       taxonomy_settings=taxonomy_settings, user_notes=user_notes)
+        preset_display = custom_preset_name if (_is_custom(pl_preset_dropdown.value) and custom_preset_name) else pl_preset_dropdown.value
+        title = (pl_story_inp.value or "").strip()[:50] or f"Bài học {preset_display}"
+        launch(request, connection, title=title)
 
-        # Reset UI
+    def launch(request, connection, resume_from=None, title=""):
+        with run_lock:
+            if pipeline_state["running"]:
+                return
+            # Copy the content and completed work before a new background run can start.
+            request = deepcopy(request)
+            resume_from = deepcopy(resume_from)
+            pipeline_state["request"] = deepcopy(request)
+            pipeline_state["checkpoint"] = resume_from
+            pipeline_state["title"] = title
+            pipeline_state["result"] = None
+            pipeline_state["running"] = True
+            stop_event = threading.Event()
+            pipeline_state["stop_event"] = stop_event
+        total_steps = request["num_questions"] + 3
+        _rebuild_step_dots(total_steps)
         _reset_step_dots()
-        pl_log_col.controls.clear()
+        if resume_from is None:
+            pl_log_col.controls.clear()
         pl_result_area.visible = False
         pl_save_btn.visible = False
+        pl_retry_btn.visible = pl_restart_btn.visible = False
+        pl_resume_note.visible = False
+        pl_failure_detail.visible = False
         pl_progress_bar.value = 0
-        pl_step_label.value = "Đang khởi động..."
+        pl_step_label.value = "Đang tiếp tục từ phần bị lỗi..." if resume_from else "Đang khởi động..."
+        pl_step_label.color = TEXT_GRAY
         pl_start_btn.visible = False
         pl_cancel_btn.visible = True
         pl_error_txt.value = ""
-        pipeline_state["running"] = True
-        pipeline_state["result"] = None
         if is_generating:
             is_generating["status"] = True
         if on_lock_nav:
             on_lock_nav(True)
         page.update()
+        _add_log("Thử lại phần chưa hoàn thành." if resume_from else "Bắt đầu lượt tạo bài học mới.", "INFO")
+        _add_log(f"Provider: {connection['provider'].upper()} | Model: {connection['model']}", "INFO")
 
-        stop_event = threading.Event()
-        pipeline_state["stop_event"] = stop_event
+        def active():
+            return pipeline_state["stop_event"] is stop_event and not stop_event.is_set()
 
-        preset_display = custom_preset_name if (_is_custom(pl_preset_dropdown.value) and custom_preset_name) else pl_preset_dropdown.value
-        _add_log(f"Provider: {provider.upper()} | Model: {model} | Preset: {preset_display}", "INFO")
-        _add_log(f"Vocab: {vocab_raw}", "INFO")
-        _add_log(f"Seed story: {seed_story[:80]}...", "INFO")
+        def remember(checkpoint):
+            with run_lock:
+                if active():
+                    pipeline_state["checkpoint"] = deepcopy(checkpoint)
 
-        user_notes = (pl_notes_inp.value or "").strip()
-        if user_notes:
-            _add_log(f"Ghi chú cá nhân: {user_notes[:120]}{'...' if len(user_notes) > 120 else ''}", "INFO")
+        def report(info):
+            with run_lock:
+                if active():
+                    _on_progress(info)
 
         def worker():
             try:
                 from lesson_pipeline import run_lesson_pipeline
                 result = run_lesson_pipeline(
-                    vocab_list=vocab_list,
-                    seed_story=seed_story,
-                    num_questions=num_q,
-                    taxonomy_settings=taxonomy_settings,
-                    provider=provider,
-                    model=model,
-                    api_key=api_key,
-                    timeout=timeout,
-                    on_progress=lambda info: _on_progress(info)
-                        if pipeline_state["stop_event"] is stop_event and not stop_event.is_set() else None,
-                    stop_event=stop_event,
-                    user_notes=user_notes,
+                    **request, **connection, resume_from=resume_from,
+                    on_checkpoint=remember, stop_event=stop_event,
+                    on_progress=report,
                 )
             except Exception as exc:
                 logger.exception("Lỗi không mong đợi trong pipeline")
                 result = {"success": False, "error": str(exc)}
-            # A cancelled/previous run must never overwrite a newer run's UI.
-            if pipeline_state["stop_event"] is not stop_event or stop_event.is_set():
-                return
-            pipeline_state["result"] = result
-            pipeline_state["running"] = False
+            with run_lock:
+                if not active():
+                    return
+                pipeline_state["result"] = result
+                pipeline_state["running"] = False
+                if "checkpoint" in result:
+                    pipeline_state["checkpoint"] = result["checkpoint"]
+                pl_cancel_btn.visible = False
+                if is_generating:
+                    is_generating["status"] = False
+                if on_lock_nav:
+                    on_lock_nav(False)
+                success = result["success"]
+                pl_start_btn.visible = success
+                if success:
+                    pl_step_label.value = f"✓ Hoàn tất! {len(result['questions'])} câu hỏi | {len(result['vocab_with_examples'])} flashcard"
+                    pl_save_btn.visible = True
+                    _add_log("Tạo bài học bằng AI thành công!", "SUCCESS")
+                else:
+                    failed_label = result.get("failed_label") or "bước đang thực hiện"
+                    pl_step_label.value = f"Lỗi tại {failed_label}"
+                    pl_failure_detail.value = result.get("error", "Không thể hoàn thành bước này.")
+                    pl_failure_detail.visible = True
+                    pl_retry_btn.visible = pl_restart_btn.visible = True
+                    pl_retry_btn.disabled = pipeline_state["checkpoint"] is None
+                    pl_resume_note.value = (
+                        "Thử lại sẽ giữ nội dung và các phần đã tạo. Có thể đổi model/API key trước khi thử lại. "
+                        "Muốn đổi từ vựng hoặc cốt truyện, hãy chọn Làm lại từ đầu. "
+                        "Tiến trình được giữ khi bạn ở màn hình này."
+                        if pipeline_state["checkpoint"] is not None else
+                        "Không có tiến trình để tiếp tục. Hãy chọn Làm lại từ đầu."
+                    )
+                    pl_resume_note.visible = True
+                    _add_log(f"{pl_step_label.value}: {result.get('error', '?')}", "ERROR")
+                pl_step_label.color = "#166534" if success else "#991b1b"
+                try:
+                    page.update()
+                except RuntimeError:
+                    pass
 
-            pl_start_btn.visible = True
+        threading.Thread(target=worker, daemon=True).start()
+
+    def do_retry(e=None):
+        if pipeline_state["running"] or pipeline_state["checkpoint"] is None:
+            return
+        request = pipeline_state["request"]
+        connection = connection_options(request["num_questions"])
+        if connection is not None:
+            launch(request, connection, resume_from=pipeline_state["checkpoint"], title=pipeline_state["title"])
+
+    def do_cancel(e=None):
+        with run_lock:
+            stop_event = pipeline_state.get("stop_event")
+            if stop_event:
+                stop_event.set()
+            pipeline_state["running"] = False
+            pipeline_state["result"] = None
+            pl_save_btn.visible = False
+            pl_step_label.value = "Đã hủy. Các phần hoàn thành vẫn được giữ ở màn hình này."
+            pl_step_label.color = TEXT_GRAY
+            has_checkpoint = pipeline_state["checkpoint"] is not None
+            pl_start_btn.visible = not has_checkpoint
+            pl_retry_btn.visible = pl_restart_btn.visible = has_checkpoint
+            pl_retry_btn.disabled = False
             pl_cancel_btn.visible = False
             if is_generating:
                 is_generating["status"] = False
             if on_lock_nav:
                 on_lock_nav(False)
-
-            if result["success"]:
-                pl_step_label.value = f"✓ Hoàn tất! {len(result['questions'])} câu hỏi | {len(result['vocab_with_examples'])} flashcard"
-                pl_step_label.color = "#166534"
-                pl_save_btn.visible = True
-                _add_log("Tạo bài học bằng AI thành công!", "SUCCESS")
-            else:
-                pl_step_label.value = f"✕ Thất bại: {result.get('error', '?')}"
-                pl_step_label.color = "#991b1b"
-                _add_log(f"Lỗi: {result.get('error')}", "ERROR")
-            try:
-                pl_step_label.color = "#166534" if result["success"] else "#991b1b"
-                pl_step_label.update()
-                pl_start_btn.update()
-                pl_cancel_btn.update()
-                pl_save_btn.update()
-            except Exception:
-                pass
             page.update()
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    def do_cancel(e=None):
-        stop_event = pipeline_state.get("stop_event")
-        if stop_event:
-            stop_event.set()
-        pipeline_state["running"] = False
-        pipeline_state["result"] = None
-        pl_save_btn.visible = False
-        pl_step_label.value = "Đã hủy. Bạn có thể bắt đầu lượt mới."
-        pl_step_label.color = "#991b1b"
-        pl_start_btn.visible = True
-        pl_cancel_btn.visible = False
-        if is_generating:
-            is_generating["status"] = False
-        if on_lock_nav:
-            on_lock_nav(False)
-        try:
-            pl_step_label.update()
-            pl_start_btn.update()
-            pl_cancel_btn.update()
-        except Exception:
-            pass
-        _add_log("Người dùng yêu cầu hủy.", "WARN")
+            _add_log("Người dùng yêu cầu hủy.", "WARN")
 
     def do_save(e=None):
         result = pipeline_state.get("result")
@@ -2310,10 +2363,8 @@ def build_pipeline_tab_content(page: ft.Page, on_success, on_lock_nav=None, is_g
             return
         try:
             from ingestion import load_lesson_from_dict
-            custom_preset_name = (pl_custom_preset_inp.value or "").strip()
-            preset_name = custom_preset_name if (_is_custom(pl_preset_dropdown.value) and custom_preset_name) else pl_preset_dropdown.value
             lesson_dict = {
-                "title": pl_story_inp.value.strip()[:50] or f"Bài học {preset_name}",
+                "title": pipeline_state["title"],
                 "story_context": result["summary_story"],
                 "story_state": result.get("story_state", {}),
                 "vocab": result["vocab_with_examples"],
@@ -2335,6 +2386,8 @@ def build_pipeline_tab_content(page: ft.Page, on_success, on_lock_nav=None, is_g
             page.update()
 
     pl_start_btn.on_click  = do_start
+    pl_retry_btn.on_click = do_retry
+    pl_restart_btn.on_click = do_start
     pl_cancel_btn.on_click = do_cancel
     pl_save_btn.on_click   = do_save
 
@@ -2355,7 +2408,7 @@ def build_pipeline_tab_content(page: ft.Page, on_success, on_lock_nav=None, is_g
         ft.Row([pl_nq_inp], spacing=10),
         pl_error_txt,
         ft.Container(height=8),
-        ft.Row([pl_start_btn, pl_cancel_btn, pl_save_btn], spacing=8),
+        ft.Row([pl_start_btn, pl_cancel_btn, pl_save_btn], spacing=8, wrap=True),
     ], spacing=8, expand=True)
 
     def open_logs_dir(e=None):
@@ -2387,7 +2440,10 @@ def build_pipeline_tab_content(page: ft.Page, on_success, on_lock_nav=None, is_g
                 stepper_row,
                 ft.Container(height=8),
                 pl_progress_bar,
-            ], spacing=0),
+                pl_failure_detail,
+                ft.Row([pl_retry_btn, pl_restart_btn], spacing=10, wrap=True),
+                pl_resume_note,
+            ], spacing=8),
             shadow_size="sm", padding=16,
         ),
         ft.Container(height=12),

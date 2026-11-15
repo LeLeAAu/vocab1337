@@ -64,6 +64,8 @@ Mở `settings.json` và điền cấu hình của bạn:
 
 ## 📂 Cấu trúc dự án
 
+Khi tạo bài học AI bị lỗi, bạn có thể chọn **Thử lại bước bị lỗi** để giữ các phần đã hoàn thành hoặc **Làm lại từ đầu** theo nội dung hiện tại. Tiến trình được giữ khi còn ở màn hình tạo bài học. Xem [hướng dẫn và phạm vi khôi phục](docs/pipeline-retry.md).
+
 ```text
 vocab1337/
 ├── main.py                     # Entry point & giao diện chính (Flet)

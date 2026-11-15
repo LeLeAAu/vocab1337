@@ -16,6 +16,7 @@ Hỗ trợ AI providers:
 """
 
 import json
+from copy import deepcopy
 import os
 import re
 import threading
@@ -1249,6 +1250,8 @@ def _generate_all_flashcards(
     total_pipeline_steps: int = 13,
     stop_event: threading.Event = None,
     user_notes: str = "",
+    completed_cards: dict = None,
+    on_card_done=None,
 ) -> list[dict]:
     """
     Sinh toàn bộ Flashcard chuyên sâu đa chiều theo từng từ riêng biệt (Dedicated 1-by-1 Generation),
@@ -1257,7 +1260,8 @@ def _generate_all_flashcards(
     """
     stop_event = _StopScope(stop_event)
     total_vocab = len(vocab_list)
-    results = [None] * total_vocab
+    saved_cards = deepcopy(completed_cards or {})
+    results = [saved_cards.get(i) for i in range(total_vocab)]
     vocab_names_list = [v.get("word", "").strip() for v in vocab_list if v.get("word")]
     vocab_names_str = ", ".join(vocab_names_list)
 
@@ -1304,13 +1308,15 @@ def _generate_all_flashcards(
 
     executor = ThreadPoolExecutor(max_workers=max_workers)
     try:
-        futures = {executor.submit(worker, i, v): i for i, v in enumerate(vocab_list)}
-        completed = 0
+        futures = {executor.submit(worker, i, v): i for i, v in enumerate(vocab_list) if i not in saved_cards}
+        completed = len(saved_cards)
         for future in as_completed(futures):
             completed += 1
             try:
                 idx, updated_vocab = future.result()
                 results[idx] = updated_vocab
+                if on_card_done:
+                    on_card_done(idx, deepcopy(updated_vocab))
             except PipelineCancelledException:
                 executor.shutdown(wait=False, cancel_futures=True)
                 raise
@@ -1360,6 +1366,36 @@ def _generate_all_flashcards(
 # ── HÀM CHÍNH: RUN LESSON PIPELINE ───────────────────────────────────────────
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _prepare_checkpoint(inputs: dict, resume_from=None) -> dict:
+    if resume_from is None:
+        return {
+            "version": 1, "inputs": deepcopy(inputs), "questions": [],
+            "story_state": initial_story_state(inputs["seed_story"]),
+            "challenge": None, "summary_story": None, "flashcards": {},
+        }
+    if not isinstance(resume_from, dict) or not {
+        "version", "inputs", "questions", "story_state", "challenge", "summary_story", "flashcards"
+    }.issubset(resume_from):
+        raise ValueError("Tiến trình được giữ lại không hợp lệ. Hãy chọn Làm lại từ đầu.")
+    saved = deepcopy(resume_from)
+    if saved.get("version") != 1 or saved.get("inputs") != inputs:
+        raise ValueError("Nội dung bài học đã thay đổi. Hãy chọn Làm lại từ đầu.")
+    questions, cards = saved.get("questions"), saved.get("flashcards")
+    if (not isinstance(questions, list) or len(questions) > inputs["num_questions"]
+            or any(not isinstance(q, dict) for q in questions)
+            or not isinstance(saved.get("story_state"), dict)
+            or not isinstance(cards, dict)
+            or any(not isinstance(i, int) or not 0 <= i < len(inputs["vocab_list"])
+                   or not isinstance(card, dict) for i, card in cards.items())
+            or (saved.get("challenge") is not None and
+                (len(questions) != inputs["num_questions"] or not isinstance(saved["challenge"], dict)))
+            or (saved.get("summary_story") is not None and
+                (saved.get("challenge") is None or not isinstance(saved["summary_story"], str)))
+            or (cards and saved.get("summary_story") is None)):
+        raise ValueError("Tiến trình được giữ lại không hợp lệ. Hãy chọn Làm lại từ đầu.")
+    return saved
+
+
 def run_lesson_pipeline(
     vocab_list: list[dict],
     seed_story: str,
@@ -1372,181 +1408,150 @@ def run_lesson_pipeline(
     on_progress=None,
     stop_event: threading.Event = None,
     user_notes: str = "",
+    resume_from: dict = None,
+    on_checkpoint=None,
 ) -> dict:
+    """Generate a lesson, optionally resuming completed steps from a snapshot.
+
+    Snapshots contain content only, never credentials. Inputs affecting content must
+    match; provider/model/key/timeout may change when retrying. Snapshots are copied
+    at boundaries so failed or cancelled jobs cannot mutate previously saved work.
     """
-    Chạy toàn bộ quy trình sinh bài học tuần tự nâng cao.
+    vocab_list = deepcopy(vocab_list)
+    taxonomy_settings = deepcopy(taxonomy_settings)
+    total = num_questions + 3
+    inputs = dict(vocab_list=vocab_list, seed_story=seed_story, num_questions=num_questions,
+                  taxonomy_settings=taxonomy_settings, user_notes=user_notes)
+    try:
+        saved = _prepare_checkpoint(inputs, resume_from)
+    except (TypeError, ValueError, AttributeError) as exc:
+        return dict(success=False, error=str(exc), checkpoint=None, failed_step=0,
+                    questions=[], story_state={}, summary_story="", vocab_with_examples=[])
+    step, label = 1, "Câu hỏi 1"
 
-    Args:
-        vocab_list         : Danh sách từ vựng (mỗi dict có ít nhất 'word', 'pos').
-        seed_story         : Cốt truyện / gợi ý ban đầu.
-        num_questions      : Số câu hỏi tuần tự (mặc định 10 câu + 1 Challenge).
-        taxonomy_settings  : Dict cấu hình Story Taxonomy (genre, aesthetic, pov, tone, etc.).
-        provider           : "ollama" | "openai" | "gemini".
-        model              : Tên model AI.
-        api_key            : Khóa API cho cloud providers.
-        timeout            : Thời gian chờ tối đa mỗi request (giây).
-        on_progress        : Callback nhận trạng thái tiến trình { step, total, label, status }.
-        stop_event         : threading.Event để hủy khi người dùng yêu cầu.
-        user_notes         : Ghi chú cá nhân của người dùng — AI sẽ dùng để cá nhân hóa nội dung.
-
-    Returns:
-        {
-            "success": bool,
-            "questions": list[dict],
-            "summary_story": str,
-            "story_state": dict,
-            "vocab_with_examples": list[dict],
-            "error": str | None
-        }
-    """
-    TOTAL = num_questions + 3
-
-    def _progress(step: int, label: str, status: str = "running", **kwargs):
+    def progress(number, text, status="running", **extra):
         if on_progress:
             try:
-                on_progress({"step": step, "total": TOTAL, "label": label, "status": status, **kwargs})
+                on_progress(dict(step=number, total=total, label=text, status=status, **extra))
             except Exception:
-                pass
+                logger.exception("Không thể cập nhật tiến trình trên giao diện")
 
-    def _is_stopped() -> bool:
-        return stop_event is not None and stop_event.is_set()
+    def publish():
+        if on_checkpoint:
+            try:
+                on_checkpoint(deepcopy(saved))
+            except Exception:
+                logger.exception("Không thể cập nhật bản lưu tiến trình trên giao diện")
 
-    questions: list[dict] = []
-    story_state = initial_story_state(seed_story)
-    story_taxonomy_formatted = format_story_taxonomy(taxonomy_settings)
+    def check_cancel():
+        if stop_event is not None and stop_event.is_set():
+            raise PipelineCancelledException("Pipeline bị hủy bởi người dùng.")
 
+    def output(success, error=None, cancelled=False):
+        questions = deepcopy(saved["questions"])
+        if saved["challenge"] is not None:
+            questions.append(deepcopy(saved["challenge"]))
+        return dict(
+            success=success, error=error, cancelled=cancelled,
+            questions=questions, story_state=deepcopy(saved["story_state"]),
+            summary_story=saved["summary_story"] or "",
+            vocab_with_examples=[deepcopy(saved["flashcards"].get(i, v)) for i, v in enumerate(vocab_list)],
+            checkpoint=deepcopy(saved), failed_step=None if success else step,
+            failed_label=None if success else label,
+        )
+
+    publish()
     try:
-        # ── Bước 1 → num_questions: Sinh câu hỏi tuần tự & cập nhật Story State ─
+        taxonomy = format_story_taxonomy(taxonomy_settings)
         for step in range(1, num_questions + 1):
-            if _is_stopped():
-                raise PipelineCancelledException("Pipeline bị hủy bởi người dùng.")
-
-            skill_name = COGNITIVE_SKILL_ROTATION[(step - 1) % len(COGNITIVE_SKILL_ROTATION)]
-            _progress(step, f"Đang tạo câu hỏi {step}/{num_questions} (Dạng: {skill_name})...")
-
-            result = _generate_one_question(
-                question_number=step,
-                total_questions=num_questions,
-                updated_story_state=story_state,
-                story_taxonomy_formatted=story_taxonomy_formatted,
-                vocab_list=vocab_list,
-                provider=provider,
-                model=model,
-                api_key=api_key,
-                timeout=timeout,
-                stop_event=stop_event,
-                user_notes=user_notes,
+            label = f"Câu hỏi {step}/{num_questions}"
+            check_cancel()
+            if step <= len(saved["questions"]):
+                progress(step, f"✓ Giữ lại {label.lower()} đã tạo.", "step_done")
+                continue
+            progress(step, f"Đang tạo {label.lower()}...")
+            generated = _generate_one_question(
+                question_number=step, total_questions=num_questions,
+                updated_story_state=deepcopy(saved["story_state"]),
+                story_taxonomy_formatted=taxonomy, vocab_list=deepcopy(vocab_list),
+                provider=provider, model=model, api_key=api_key, timeout=timeout,
+                stop_event=stop_event, user_notes=user_notes,
             )
+            check_cancel()
+            question, story = generated["question"], generated["updated_story"]
+            if not isinstance(question, dict) or not isinstance(story, dict):
+                raise ValueError("Câu hỏi hoặc trạng thái câu chuyện không hợp lệ.")
+            saved["questions"].append(deepcopy(question))
+            saved["story_state"] = deepcopy(story)
+            publish()
+            progress(step, f"✓ {label} hoàn tất.", "step_done")
 
-            questions.append(result["question"])
-            story_state = result["updated_story"]
-
-            chars_count = len(story_state.get("characters", []))
-            events_count = len(story_state.get("established_events", []))
-            _progress(
-                step,
-                f"✓ Câu hỏi {step}/{num_questions} hoàn tất (State: {chars_count} NV, {events_count} SK).",
-                status="step_done"
+        step, label = num_questions + 1, "Master Challenge"
+        check_cancel()
+        if saved["challenge"] is None:
+            progress(step, "Đang tạo Master Challenge...")
+            challenge = _generate_challenge(
+                questions=deepcopy(saved["questions"]), vocab_list=deepcopy(vocab_list),
+                updated_story_state=deepcopy(saved["story_state"]),
+                story_taxonomy_formatted=taxonomy, provider=provider, model=model,
+                api_key=api_key, timeout=timeout, stop_event=stop_event,
+                user_notes=user_notes, challenge_step=step,
             )
+            check_cancel()
+            if not isinstance(challenge, dict):
+                raise ValueError("Master Challenge không hợp lệ.")
+            saved["challenge"] = deepcopy(challenge)
+            publish()
+        progress(step, "✓ Master Challenge hoàn thành.", "step_done")
 
-        # ── Bước Challenge (Final Evaluation) ─────────────────────────────────
-        challenge_step = num_questions + 1
-        summary_step = num_questions + 2
-        flashcard_step = num_questions + 3
+        step, label = num_questions + 2, "Tổng hợp câu chuyện"
+        check_cancel()
+        if saved["summary_story"] is None:
+            progress(step, "Đang tổng hợp câu chuyện...")
+            summary = _generate_summary_story(
+                questions=deepcopy(saved["questions"] + [saved["challenge"]]),
+                vocab_list=deepcopy(vocab_list), updated_story_state=deepcopy(saved["story_state"]),
+                provider=provider, model=model, api_key=api_key, timeout=timeout,
+                stop_event=stop_event, user_notes=user_notes, summary_step=step,
+            )
+            check_cancel()
+            if not isinstance(summary, str) or not summary.strip():
+                raise ValueError("Câu chuyện tổng hợp đang rỗng.")
+            saved["summary_story"] = summary
+            publish()
+        progress(step, "✓ Câu chuyện tổng hợp hoàn thành.", "step_done")
 
-        if _is_stopped():
-            raise PipelineCancelledException("Pipeline bị hủy bởi người dùng.")
+        step, label = num_questions + 3, "Flashcards"
+        check_cancel()
+        def card_done(index, card):
+            check_cancel()
+            if not isinstance(card, dict):
+                raise ValueError("Flashcard được tạo không hợp lệ.")
+            saved["flashcards"][index] = deepcopy(card)
+            publish()
 
-        _progress(challenge_step, "Đang tổng hợp Final Evaluation (Master Challenge)...")
-        challenge_q = _generate_challenge(
-            questions=questions,
-            vocab_list=vocab_list,
-            updated_story_state=story_state,
-            story_taxonomy_formatted=story_taxonomy_formatted,
-            provider=provider,
-            model=model,
-            api_key=api_key,
-            timeout=timeout,
-            stop_event=stop_event,
-            user_notes=user_notes,
-            challenge_step=challenge_step,
+        progress(step, f"Đang tạo flashcards ({len(saved['flashcards'])}/{len(vocab_list)} đã có)...")
+        cards = _generate_all_flashcards(
+            vocab_list=deepcopy(vocab_list), summary_story=saved["summary_story"],
+            provider=provider, model=model, api_key=api_key, timeout=timeout,
+            on_progress=on_progress, step_base=step, total_pipeline_steps=total,
+            stop_event=stop_event, user_notes=user_notes,
+            completed_cards=deepcopy(saved["flashcards"]), on_card_done=card_done,
         )
-        questions.append(challenge_q)
-        _progress(challenge_step, "✓ Master Challenge hoàn thành.", status="step_done")
-
-        # ── Bước Tổng hợp Structured Summary Story ───────────────────────────
-        if _is_stopped():
-            raise PipelineCancelledException("Pipeline bị hủy bởi người dùng.")
-
-        _progress(summary_step, "Đang kiến tạo Structured Summary Story...")
-        summary_story = _generate_summary_story(
-            questions=questions,
-            vocab_list=vocab_list,
-            updated_story_state=story_state,
-            provider=provider,
-            model=model,
-            api_key=api_key,
-            timeout=timeout,
-            stop_event=stop_event,
-            user_notes=user_notes,
-            summary_step=summary_step,
-        )
-        _progress(summary_step, "✓ Structured Summary Story hoàn thành.", status="step_done")
-
-        # ── Bước Flashcard Đa chiều ───────────────────────────────────────────
-        if _is_stopped():
-            raise PipelineCancelledException("Pipeline bị hủy bởi người dùng.")
-
-        _progress(flashcard_step, f"Đang tạo {len(vocab_list)} Flashcard đa chiều...")
-        vocab_with_flashcards = _generate_all_flashcards(
-            vocab_list=vocab_list,
-            summary_story=summary_story,
-            provider=provider,
-            model=model,
-            api_key=api_key,
-            timeout=timeout,
-            on_progress=on_progress,
-            step_base=flashcard_step,
-            total_pipeline_steps=TOTAL,
-            stop_event=stop_event,
-            user_notes=user_notes,
-        )
-        if _is_stopped():
-            raise PipelineCancelledException("Pipeline bị hủy bởi người dùng.")
-        _progress(flashcard_step, f"✓ Toàn bộ {len(vocab_list)} Flashcards hoàn thành.", status="step_done")
-
-        # ── Hoàn tất toàn bộ Pipeline ─────────────────────────────────────────
-        _progress(TOTAL, "✓ Toàn bộ bài học đã được sinh thành công!", status="done")
-        return {
-            "success": True,
-            "questions": questions,
-            "summary_story": summary_story,
-            "story_state": story_state,
-            "vocab_with_examples": vocab_with_flashcards,
-            "error": None,
-        }
-
-    except PipelineCancelledException:
-        _progress(0, "✕ Pipeline đã bị hủy bởi người dùng.", status="warn")
-        return {
-            "success": False,
-            "cancelled": True,
-            "questions": questions,
-            "summary_story": story_state.get("story_summary", ""),
-            "story_state": story_state,
-            "vocab_with_examples": list(vocab_list),
-            "error": "Pipeline bị hủy bởi người dùng.",
-        }
-    except Exception as ex:
-        err_msg = str(ex)
-        if "timed out" in err_msg.lower() or "timeout" in err_msg.lower():
-            err_msg = f"AI phản hồi quá lâu (timeout {timeout}s). Hãy thử model nhẹ hơn hoặc tăng timeout."
-        _progress(0, f"✕ Lỗi: {err_msg}", status="error")
-        return {
-            "success": False,
-            "questions": questions,
-            "summary_story": "",
-            "story_state": story_state,
-            "vocab_with_examples": list(vocab_list),
-            "error": err_msg,
-        }
+        check_cancel()
+        if len(cards) != len(vocab_list) or any(not isinstance(c, dict) for c in cards):
+            raise ValueError("Danh sách flashcard chưa đầy đủ.")
+        saved["flashcards"] = {i: deepcopy(card) for i, card in enumerate(cards)}
+        publish()
+        progress(step, "✓ Toàn bộ flashcards hoàn thành.", "step_done")
+        progress(total, "✓ Toàn bộ bài học đã được tạo thành công!", "done")
+        return output(True)
+    except PipelineCancelledException as exc:
+        progress(step, str(exc), "warn")
+        return output(False, str(exc), cancelled=True)
+    except Exception as exc:
+        message = str(exc)
+        if "timed out" in message.lower() or "timeout" in message.lower():
+            message = f"AI phản hồi quá lâu (timeout {timeout}s). Có thể đổi model hoặc tăng timeout rồi thử lại."
+        progress(step, f"Lỗi tại {label}: {message}", "error")
+        return output(False, message)

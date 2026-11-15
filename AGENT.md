@@ -215,9 +215,9 @@ Cơ sở dữ liệu chính: `brain_archive.db`.
 
 ### ❌ Lỗi 2: Lỗi SSL khi cài đặt Pip (`SSL: CERTIFICATE_VERIFY_FAILED`)
 - Do proxy công ty hoặc chứng chỉ nội bộ Windows, khi chạy `pip install` thường bị lỗi chứng chỉ SSL.
-- **BẮT BUỘC** bổ sung cờ bỏ qua kiểm tra host khi cài đặt:
+- Giữ kiểm tra TLS mặc định; không dùng `--trusted-host` để bỏ qua lỗi chứng chỉ. Nếu dùng proxy doanh nghiệp, cấu hình CA tin cậy qua `PIP_CERT` hoặc kho chứng chỉ hệ thống trước khi cài đặt:
   ```bash
-  pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
+  pip install -r requirements.txt
   ```
 
 ### ❌ Lỗi 3: Lỗi mã hóa Tiếng Việt trên Windows Terminal (`UnicodeEncodeError: 'charmap' codec...`)

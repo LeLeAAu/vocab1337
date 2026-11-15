@@ -85,11 +85,11 @@ def play_audio_file(file_path: str):
     global _current_alias
     if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
         logger.warning("Không thể phát âm thanh: tệp không tồn tại hoặc rỗng: %s", file_path)
-        return
+        return False
 
     if not _mci:
         logger.warning("Windows MCI không khả dụng trên hệ thống này")
-        return
+        return False
 
     with _audio_lock:
         stop_audio()
@@ -100,7 +100,7 @@ def play_audio_file(file_path: str):
         res = _mci(open_cmd, None, 0, 0)
         if res == 0:
             logger.debug("MCI mở thành công alias '%s'. Đang phát: %s", _current_alias, abs_path)
-            _mci(f"play {_current_alias}", None, 0, 0)
+            return _mci(f"play {_current_alias}", None, 0, 0) == 0
         else:
             err_buf = ctypes.create_unicode_buffer(256)
             if hasattr(ctypes, "windll") and hasattr(ctypes.windll, "winmm") and hasattr(ctypes.windll.winmm, "mciGetErrorStringW"):
@@ -124,25 +124,28 @@ async def _download_edge_tts(text: str, output_path: str, voice: str, rate: str)
     await communicate.save(output_path)
 
 
-def _sapi_fallback(text: str):
+def _sapi_fallback(text: str) -> bool:
     """Fallback an toàn bằng SAPI nếu hoàn toàn không có mạng và file chưa cache."""
+    if os.name != "nt":
+        return False
     logger.info("Kích hoạt SAPI SpVoice fallback cho: '%s'", (text or "")[:40])
     try:
         safe_text = (text or "").replace("'", "''")
         ps_cmd = f"(New-Object -ComObject SAPI.SpVoice).Speak('{safe_text}')"
         creationflags = 0x08000000 if os.name == "nt" else 0
-        subprocess.run(
+        result = subprocess.run(
             ["powershell", "-NoProfile", "-Command", ps_cmd],
             capture_output=True,
             creationflags=creationflags,
             timeout=10,
         )
-        logger.debug("SAPI SpVoice hoàn thành")
+        return result.returncode == 0
     except Exception as e:
         logger.error("Lỗi SAPI SpVoice fallback: %s", e, exc_info=True)
+        return False
 
 
-def speak(text: str, voice: str = None, rate: str = None, on_error: callable = None):
+def speak(text: str, voice: str = None, rate: str = None, on_error: callable = None, on_audio_ready: callable = None):
     """
     Phát âm thanh text trong background thread (không block UI).
     Tự động kiểm tra cache, nếu chưa có sẽ tải về qua Edge-TTS rồi phát ngay.
@@ -156,47 +159,30 @@ def speak(text: str, voice: str = None, rate: str = None, on_error: callable = N
 
     def _worker():
         target_file = get_cache_path(clean_text, act_voice, act_rate)
-
-        # 1. Kiểm tra cache
-        if os.path.exists(target_file) and os.path.getsize(target_file) > 100:
-            logger.debug("TTS Cache HIT: '%s' -> %s (%d bytes)", clean_text[:35], os.path.basename(target_file), os.path.getsize(target_file))
-            play_audio_file(target_file)
-            return
-
-        # 2. Tải qua Edge-TTS
-        if EDGE_TTS_AVAILABLE:
-            tmp_file = f"{target_file}.tmp_{os.getpid()}_{threading.get_ident()}"
-            t0 = time.time()
-            logger.info("TTS Cache MISS: Tải Edge-TTS cho '%s' (voice=%s, rate=%s)...", clean_text[:35], act_voice, act_rate)
+        tmp_file = f"{target_file}.tmp_{os.getpid()}_{threading.get_ident()}"
+        try:
+            if not (os.path.isfile(target_file) and os.path.getsize(target_file) > 100):
+                if not EDGE_TTS_AVAILABLE:
+                    raise RuntimeError("Chưa cài edge-tts để tạo âm thanh.")
+                asyncio.run(_download_edge_tts(clean_text, tmp_file, act_voice, act_rate))
+                if not os.path.isfile(tmp_file) or os.path.getsize(tmp_file) <= 100:
+                    raise RuntimeError("Dịch vụ đọc văn bản trả về âm thanh rỗng.")
+                os.replace(tmp_file, target_file)
+            if on_audio_ready:
+                on_audio_ready(target_file)
+            elif not play_audio_file(target_file):
+                raise RuntimeError("Không có trình phát âm thanh khả dụng.")
+        except Exception as exc:
+            logger.warning("Không thể đọc văn bản: %s", exc)
+            # Browser sessions need client playback, not a Windows-only fallback.
+            if on_audio_ready is None and _sapi_fallback(clean_text):
+                return
+            if on_error:
+                on_error(exc)
+        finally:
             try:
-                # Tạo event loop riêng cho thread này
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(_download_edge_tts(clean_text, tmp_file, act_voice, act_rate))
-                loop.close()
-
-                if os.path.exists(tmp_file) and os.path.getsize(tmp_file) > 100:
-                    os.replace(tmp_file, target_file)
-                    sz = os.path.getsize(target_file)
-                    logger.info("Tải Edge-TTS thành công (%.2fs, %d bytes): %s", time.time() - t0, sz, os.path.basename(target_file))
-                    play_audio_file(target_file)
-                    return
-                elif os.path.exists(tmp_file):
-                    os.remove(tmp_file)
-            except Exception as e:
-                logger.warning("Lỗi tải Edge-TTS cho '%s': %s (fallback sang SAPI)", clean_text[:35], e, exc_info=True)
-                if os.path.exists(tmp_file):
-                    try:
-                        os.remove(tmp_file)
-                    except Exception:
-                        pass
-                if on_error:
-                    try:
-                        on_error(e)
-                    except Exception:
-                        pass
-
-        # 3. Fallback SAPI nếu thất bại
-        _sapi_fallback(clean_text)
+                os.remove(tmp_file)
+            except FileNotFoundError:
+                pass
 
     threading.Thread(target=_worker, daemon=True, name="TTS-Worker").start()

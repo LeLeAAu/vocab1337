@@ -15,53 +15,15 @@ Hỗ trợ 2 chế độ:
 """
 
 import flet as ft
+from .theme import (TEXT_DARK, TEXT_GRAY, TEXT_WHITE, BG_WHITE, CLR_GREEN, CLR_RED,
+                    CLR_BLUE, CLR_YELLOW, SHADOW_SM, SHADOW_MD, SHADOW_LG,
+                    mk_border, pad, nb_card, close_dialog, nb_button as themed_button)
 from logger import get_logger
 
 logger = get_logger("flashcard")
 
-TEXT_DARK = "#111827"
-TEXT_GRAY = "#6b7280"
-TEXT_WHITE = "#ffffff"
-BG_WHITE  = "#ffffff"
-CLR_GREEN = "#bbf7d0"
-CLR_RED   = "#fecaca"
-CLR_BLUE  = "#bfdbfe"
-CLR_YELLOW = "#fef08a"
 
-SHADOW_SM = ft.BoxShadow(offset=ft.Offset(4, 4), blur_radius=0, color=TEXT_DARK)
-SHADOW_MD = ft.BoxShadow(offset=ft.Offset(8, 8), blur_radius=0, color=TEXT_DARK)
-
-
-def mk_border(w: int, c: str) -> ft.Border:
-    s = ft.BorderSide(w, c)
-    return ft.Border(left=s, right=s, top=s, bottom=s)
-
-
-def pad(all_=None, h=None, v=None, left=0, top=0, right=0, bottom=0) -> ft.Padding:
-    if all_ is not None:
-        return ft.Padding(left=all_, top=all_, right=all_, bottom=all_)
-    if h is not None or v is not None:
-        _h = h or 0; _v = v or 0
-        return ft.Padding(left=_h, top=_v, right=_h, bottom=_v)
-    return ft.Padding(left=left, top=top, right=right, bottom=bottom)
-
-
-def nb_button(label: str, icon: str = "", on_click=None, bgcolor=BG_WHITE, color=TEXT_DARK, width=None) -> ft.Container:
-    row_content = []
-    if icon:
-        row_content.append(ft.Text(icon, size=15, color=color))
-    row_content.append(ft.Text(label.upper(), size=12, weight=ft.FontWeight.W_800, color=color))
-
-    return ft.Container(
-        content=ft.Row(row_content, spacing=8, alignment=ft.MainAxisAlignment.CENTER),
-        bgcolor=bgcolor,
-        border=mk_border(2, TEXT_DARK),
-        shadow=SHADOW_SM,
-        padding=pad(h=16, v=12),
-        on_click=on_click,
-        width=width,
-        ink=True,
-    )
+nb_button = themed_button
 
 
 def show_pronunciation_modal(page: ft.Page, word: str, ipa: str = "", on_speak: callable = None):
@@ -82,7 +44,7 @@ def show_pronunciation_modal(page: ft.Page, word: str, ipa: str = "", on_speak: 
     is_busy = False
 
     def close_dlg(e=None):
-        page.pop_dialog()
+        close_dialog(dlg)
 
     btn_close.on_click = close_dlg
 

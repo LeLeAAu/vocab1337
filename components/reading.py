@@ -6,54 +6,22 @@ Tự động đổi theme vàng kim cho Master Challenge ở câu cuối cùng.
 """
 
 import flet as ft
+from .theme import (TEXT_DARK, TEXT_GRAY, TEXT_WHITE, BG_WHITE, CLR_GREEN, CLR_RED,
+                    CLR_BLUE, CLR_YELLOW, SHADOW_SM, SHADOW_MD, SHADOW_LG,
+                    mk_border, pad, nb_card, close_dialog, nb_button as themed_button)
 from logger import get_logger
 from .quiz_renderer import build_quiz_view
 
 logger = get_logger("reading")
 
-TEXT_DARK = "#111827"
-TEXT_GRAY = "#6b7280"
-TEXT_WHITE = "#ffffff"
-BG_WHITE  = "#ffffff"
-CLR_BLUE  = "#bfdbfe"
-CLR_YELLOW = "#fef08a"
 
 MASTER_BG = "#fefce8"
 MASTER_BORDER = "#ca8a04"
 MASTER_SHADOW = "#854d0e"
 
-SHADOW_SM = ft.BoxShadow(offset=ft.Offset(4, 4), blur_radius=0, color=TEXT_DARK)
 
-
-def mk_border(w: int, c: str) -> ft.Border:
-    s = ft.BorderSide(w, c)
-    return ft.Border(left=s, right=s, top=s, bottom=s)
-
-
-def pad(all_=None, h=None, v=None, left=0, top=0, right=0, bottom=0) -> ft.Padding:
-    if all_ is not None:
-        return ft.Padding(left=all_, top=all_, right=all_, bottom=all_)
-    if h is not None or v is not None:
-        _h = h or 0; _v = v or 0
-        return ft.Padding(left=_h, top=_v, right=_h, bottom=_v)
-    return ft.Padding(left=left, top=top, right=right, bottom=bottom)
-
-
-def nb_button(label: str, icon: str = "", on_click=None, bgcolor=TEXT_DARK, color=BG_WHITE) -> ft.Container:
-    row_content = []
-    if icon:
-        row_content.append(ft.Text(icon, size=15, color=color))
-    row_content.append(ft.Text(label.upper(), size=12, weight=ft.FontWeight.W_800, color=color))
-
-    return ft.Container(
-        content=ft.Row(row_content, spacing=8, alignment=ft.MainAxisAlignment.CENTER),
-        bgcolor=bgcolor,
-        border=mk_border(2, TEXT_DARK),
-        shadow=SHADOW_SM,
-        padding=pad(h=20, v=12),
-        on_click=on_click,
-        ink=True,
-    )
+def nb_button(label, icon="", on_click=None, bgcolor=TEXT_DARK, color=BG_WHITE):
+    return themed_button(label, icon, on_click, bgcolor, color, h_padding=20)
 
 
 def build_reading_view(
@@ -115,7 +83,7 @@ def build_reading_view(
                     ft.Text("⚡", size=20),
                     ft.Text("THỬ THÁCH AI NGẪU NHIÊN", size=16, weight=ft.FontWeight.W_900, color=TEXT_DARK),
                 ], spacing=6),
-                ft.IconButton(ft.Icons.CLOSE, on_click=lambda e: pg.pop_dialog(), icon_color=TEXT_DARK),
+                ft.IconButton(ft.Icons.CLOSE, on_click=lambda e: close_dialog(dlg), icon_color=TEXT_DARK),
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             content=ft.Container(content=modal_body, width=580),
         )

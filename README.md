@@ -89,6 +89,7 @@ python -m unittest discover -s tests -v
 ```
 
 Xem [ghi chú rà soát và cải thiện](docs/review-2026-11-15.md) để biết các lỗi đã sửa, ảnh UI và phạm vi kiểm tra.
+Đợt tiếp theo: [cấu trúc UI, thông báo, cache Whisper, hủy AI và phát âm thanh web](docs/improvements-round-2.md). Sau khi cập nhật code, cài lại `requirements.txt` để có `flet-audio`.
 
 1. Tạo branch mới cho tính năng hoặc bản sửa lỗi:
    ```bash

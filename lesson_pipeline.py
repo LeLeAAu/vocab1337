@@ -19,6 +19,7 @@ import json
 import os
 import re
 import threading
+import time
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -147,17 +148,21 @@ def _call_ai(
         future = executor.submit(
             _call_ai_raw, user_prompt, system_prompt, provider, model, api_key, timeout
         )
-        start_time = time.time()
+        start_time = time.monotonic()
         while True:
             if stop_event and stop_event.is_set():
                 executor.shutdown(wait=False, cancel_futures=True)
                 raise PipelineCancelledException("Pipeline bị hủy bởi người dùng.")
             try:
                 res = future.result(timeout=0.3)
+                if stop_event and stop_event.is_set():
+                    raise PipelineCancelledException("Pipeline bị hủy bởi người dùng.")
                 executor.shutdown(wait=False)
                 return res
             except FuturesTimeoutError:
-                if time.time() - start_time > timeout:
+                if future.done():
+                    raise
+                if time.monotonic() - start_time > timeout:
                     executor.shutdown(wait=False, cancel_futures=True)
                     raise TimeoutError(f"AI phản hồi quá lâu (timeout {timeout}s). Hãy thử model nhẹ hơn.")
     except Exception:
@@ -169,7 +174,7 @@ def _call_ollama(user_prompt: str, system_prompt: str, model: str, timeout: int)
     """Gọi Ollama REST API cục bộ."""
     try:
         import ollama as ollama_sdk
-        response = ollama_sdk.chat(
+        response = ollama_sdk.Client(timeout=timeout).chat(
             model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -1150,6 +1155,36 @@ def _normalize_flashcard(vocab_item: dict, data: dict) -> dict:
     return updated
 
 
+class _StopScope:
+    """Cancel sibling jobs on failure without changing the caller's stop signal."""
+    def __init__(self, parent=None):
+        self.parent = parent
+        self.event = threading.Event()
+
+    def is_set(self):
+        return self.event.is_set() or bool(self.parent and self.parent.is_set())
+
+    def set(self):
+        self.event.set()
+
+    def wait(self, seconds):
+        deadline = time.monotonic() + seconds
+        while not self.is_set():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            self.event.wait(min(remaining, 0.1))
+        return True
+
+
+def _pause(seconds: float, stop_event=None):
+    """Retry/stagger waits must remain cancellable."""
+    if stop_event is None:
+        time.sleep(seconds)
+    elif stop_event.wait(seconds):
+        raise PipelineCancelledException("Pipeline bị hủy bởi người dùng.")
+
+
 def _generate_one_flashcard(
     vocab_item: dict,
     vocab_list_str: str,
@@ -1192,7 +1227,7 @@ def _generate_one_flashcard(
         except Exception as e:
             last_err = e
             import time
-            time.sleep(1.0)
+            _pause(1.0, stop_event)
 
     if not data or not isinstance(data, dict):
         if last_err:
@@ -1220,7 +1255,7 @@ def _generate_all_flashcards(
     đảm bảo độ sâu ngữ nghĩa, sắc thái và ví dụ đạt chuẩn cao nhất.
     Tự động phân bổ xoay vòng các model trong Failover Pool cho từng từ để tối ưu tốc độ và không bị nghẽn Rate Limit (RPM).
     """
-    import time
+    stop_event = _StopScope(stop_event)
     total_vocab = len(vocab_list)
     results = [None] * total_vocab
     vocab_names_list = [v.get("word", "").strip() for v in vocab_list if v.get("word")]
@@ -1241,7 +1276,7 @@ def _generate_all_flashcards(
 
         # Nhẹ nhàng stagger các thread cách nhau một chút
         if is_cloud and idx > 0:
-            time.sleep(idx * 0.2)
+            _pause(0.2, stop_event)
 
         assigned_model = pool[idx % len(pool)]
         try:
@@ -1256,16 +1291,19 @@ def _generate_all_flashcards(
             # Fallback với model tiếp theo trong pool
             try:
                 fallback_model = pool[(idx + 1) % len(pool)]
-                time.sleep(1.0)
+                _pause(1.0, stop_event)
                 updated = _generate_one_flashcard(
                     vocab_item, vocab_names_str, summary_story, provider, fallback_model, api_key, timeout,
                     stop_event=stop_event, user_notes=user_notes, step_idx=step_base,
                 )
                 return idx, updated
-            except Exception:
-                return idx, dict(vocab_item)
+            except PipelineCancelledException:
+                raise
+            except Exception as exc:
+                raise ValueError(f"Không thể tạo flashcard cho từ {vocab_item.get('word', '?')}: {exc}") from exc
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    executor = ThreadPoolExecutor(max_workers=max_workers)
+    try:
         futures = {executor.submit(worker, i, v): i for i, v in enumerate(vocab_list)}
         completed = 0
         for future in as_completed(futures):
@@ -1277,8 +1315,7 @@ def _generate_all_flashcards(
                 executor.shutdown(wait=False, cancel_futures=True)
                 raise
             except Exception:
-                orig_idx = futures[future]
-                results[orig_idx] = dict(vocab_list[orig_idx])
+                raise
 
             if on_progress:
                 on_progress({
@@ -1288,6 +1325,10 @@ def _generate_all_flashcards(
                     "status": "running",
                     "sub_progress": completed / max(1, total_vocab),
                 })
+
+    finally:
+        stop_event.set()
+        executor.shutdown(wait=False, cancel_futures=True)
 
     for i, r in enumerate(results):
         if r is None:
@@ -1378,14 +1419,7 @@ def run_lesson_pipeline(
         # ── Bước 1 → num_questions: Sinh câu hỏi tuần tự & cập nhật Story State ─
         for step in range(1, num_questions + 1):
             if _is_stopped():
-                return {
-                    "success": False,
-                    "questions": [],
-                    "summary_story": "",
-                    "story_state": story_state,
-                    "vocab_with_examples": list(vocab_list),
-                    "error": "Pipeline bị hủy bởi người dùng."
-                }
+                raise PipelineCancelledException("Pipeline bị hủy bởi người dùng.")
 
             skill_name = COGNITIVE_SKILL_ROTATION[(step - 1) % len(COGNITIVE_SKILL_ROTATION)]
             _progress(step, f"Đang tạo câu hỏi {step}/{num_questions} (Dạng: {skill_name})...")
@@ -1477,6 +1511,8 @@ def run_lesson_pipeline(
             stop_event=stop_event,
             user_notes=user_notes,
         )
+        if _is_stopped():
+            raise PipelineCancelledException("Pipeline bị hủy bởi người dùng.")
         _progress(flashcard_step, f"✓ Toàn bộ {len(vocab_list)} Flashcards hoàn thành.", status="step_done")
 
         # ── Hoàn tất toàn bộ Pipeline ─────────────────────────────────────────
@@ -1494,6 +1530,7 @@ def run_lesson_pipeline(
         _progress(0, "✕ Pipeline đã bị hủy bởi người dùng.", status="warn")
         return {
             "success": False,
+            "cancelled": True,
             "questions": questions,
             "summary_story": story_state.get("story_summary", ""),
             "story_state": story_state,

@@ -52,13 +52,13 @@ echo.
 
 REM Kiem tra va tu dong cai dat thu vien tu requirements.txt neu thieu
 if exist "requirements.txt" (
-    %PY_CMD% -c "import flet, edge_tts" >nul 2>&1
+    %PY_CMD% -c "import flet, flet_audio, edge_tts" >nul 2>&1
     if !ERRORLEVEL! neq 0 (
         echo ===================================================
         echo [HE THONG] Phat hien thieu thu vien can thiet!
         echo Dang tu dong cai dat dua tren requirements.txt...
         echo ===================================================
-        %PY_CMD% -m pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
+        %PY_CMD% -m pip install -r requirements.txt
         if !ERRORLEVEL! neq 0 (
             echo [CANH BAO] Qua trinh cai dat thu vien gap su co. Dang thu khoi chay...
         ) else (

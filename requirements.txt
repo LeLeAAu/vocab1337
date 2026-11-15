@@ -1,5 +1,6 @@
 # Core UI Framework
 flet==0.85.3
+flet-audio==0.85.3
 
 # Text-to-Speech (Microsoft Azure Neural Voices)
 edge-tts>=7.0.0

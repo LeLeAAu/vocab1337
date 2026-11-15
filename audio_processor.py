@@ -9,6 +9,7 @@ import os
 import time
 import string
 import tempfile
+import threading
 
 from logger import get_logger
 
@@ -123,38 +124,41 @@ def check_pronunciation(
 
 
 _MODEL_CACHE = {}
+_MODEL_WARNINGS = {}
+_MODEL_LOCK = threading.Lock()
+
 
 def get_whisper_model(model_size: str = "base", device: str = "cpu"):
-    """Lấy hoặc khởi tạo WhisperModel có áp dụng caching để tránh nạp lại nhiều lần."""
-    global _MODEL_CACHE
+    """Load once per configuration, including a cached CUDA -> CPU fallback."""
     key = (model_size, device)
-    if key in _MODEL_CACHE:
-        logger.debug("Lấy WhisperModel (%s, %s) từ bộ nhớ cache", model_size, device)
-        return _MODEL_CACHE[key], ""
+    with _MODEL_LOCK:
+        if key in _MODEL_CACHE:
+            return _MODEL_CACHE[key], _MODEL_WARNINGS.get(key, "")
+        if not AI_AVAILABLE:
+            return None, ""
+        try:
+            model = WhisperModel(model_size, device=device, compute_type="float32")
+            _MODEL_CACHE[key] = model
+            return model, ""
+        except Exception as exc:
+            logger.warning("Không thể nạp Whisper trên %s: %s", device, exc)
+            if device != "cuda":
+                return None, ""
 
-    cuda_warning = ""
-    model = None
-    logger.info("Đang nạp mô hình WhisperModel (size='%s', device='%s')...", model_size, device)
-    t0 = time.time()
-    try:
-        model = WhisperModel(model_size, device=device, compute_type="float32")
-        _MODEL_CACHE[key] = model
-        logger.info("Nạp WhisperModel thành công trên %s (%.2fs)", device, time.time() - t0)
-        return model, ""
-    except Exception as e:
-        logger.warning("Không thể nạp WhisperModel trên device '%s': %s", device, e)
-        if device == "cuda":
-            cuda_warning = " [Không nhận diện được NVIDIA GPU (CUDA), đã tự động chuyển sang CPU]"
-            try:
-                logger.info("Thử nạp lại WhisperModel trên CPU float32...")
+        warning = " [CUDA không khả dụng, đang sử dụng CPU]"
+        cpu_key = (model_size, "cpu")
+        try:
+            model = _MODEL_CACHE.get(cpu_key)
+            if model is None:
                 model = WhisperModel(model_size, device="cpu", compute_type="float32")
-                _MODEL_CACHE[(model_size, "cpu")] = model
-                logger.info("Nạp WhisperModel thành công trên CPU fallback (%.2fs)", time.time() - t0)
-                return model, cuda_warning
-            except Exception as e2:
-                logger.error("Không thể nạp WhisperModel cả trên CPU fallback: %s", e2, exc_info=True)
-                return None, cuda_warning
-        return None, ""
+                _MODEL_CACHE[cpu_key] = model
+            # Alias the requested device so later calls do not retry CUDA or reload CPU.
+            _MODEL_CACHE[key] = model
+            _MODEL_WARNINGS[key] = warning
+            return model, warning
+        except Exception as exc:
+            logger.error("Không thể nạp Whisper trên CPU fallback: %s", exc)
+            return None, warning
 
 
 def verify_voice_pronunciation(

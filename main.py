@@ -32,31 +32,17 @@ from database import (
 from ingestion import load_lesson_from_dict
 from components.flashcard import build_flashcard_view
 from components.reading import build_reading_view
+from components.audio_player import PageAudioPlayer
 
 # ── Palette Neubrutalism ───────────────────────────────────────────────────────
-BG_PAGE    = "#f3f4f6"
-BG_WHITE   = "#ffffff"
-BG_SIDEBAR = "#111827"
-TEXT_DARK  = "#111827"
-TEXT_GRAY  = "#6b7280"
-TEXT_WHITE = "#ffffff"
-
-CLR_GREEN  = "#bbf7d0"
-CLR_BLUE   = "#bfdbfe"
-CLR_YELLOW = "#fef08a"
-CLR_RED    = "#fecaca"
-
-SHADOW_SM  = ft.BoxShadow(offset=ft.Offset(4, 4),  blur_radius=0, color=TEXT_DARK)
-SHADOW_MD  = ft.BoxShadow(offset=ft.Offset(8, 8),  blur_radius=0, color=TEXT_DARK)
-SHADOW_LG  = ft.BoxShadow(offset=ft.Offset(12, 12), blur_radius=0, color=TEXT_DARK)
-
-NAV_ITEMS = [
-    ("dashboard", ft.Icons.DASHBOARD_OUTLINED, "DASHBOARD"),
-    ("lessons",   ft.Icons.MENU_BOOK_ROUNDED, "BÀI HỌC"),
-    ("random",    ft.Icons.SHUFFLE_ROUNDED, "HỌC NGẪU NHIÊN"),
-    ("create",    ft.Icons.ADD_BOX_OUTLINED, "TẠO BÀI HỌC"),
-    ("settings",  ft.Icons.SETTINGS_OUTLINED, "CÀI ĐẶT"),
-]
+from components.theme import (
+    BG_PAGE, BG_WHITE, BG_SIDEBAR, TEXT_DARK, TEXT_GRAY, TEXT_WHITE,
+    CLR_GREEN, CLR_BLUE, CLR_YELLOW, CLR_RED, SHADOW_SM, SHADOW_MD, SHADOW_LG,
+    mk_border, pad, marg, nb_button, nb_card, label_text, heading_text, close_dialog,
+)
+from views.dashboard import build_dashboard
+from views.sidebar import build_sidebar
+from views.random_practice import build_random_screen
 
 
 import os
@@ -100,22 +86,6 @@ def save_settings(settings: dict):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-def mk_border(w: int, c: str) -> ft.Border:
-    s = ft.BorderSide(w, c)
-    return ft.Border(left=s, right=s, top=s, bottom=s)
-
-
-def pad(all_=None, h=None, v=None, left=0, top=0, right=0, bottom=0) -> ft.Padding:
-    if all_ is not None:
-        return ft.Padding(left=all_, top=all_, right=all_, bottom=all_)
-    if h is not None or v is not None:
-        _h = h or 0; _v = v or 0
-        return ft.Padding(left=_h, top=_v, right=_h, bottom=_v)
-    return ft.Padding(left=left, top=top, right=right, bottom=bottom)
-
-
-def marg(top=0, bottom=0, left=0, right=0) -> ft.Margin:
-    return ft.Margin(left=left, top=top, right=right, bottom=bottom)
 
 
 def copy_to_clipboard(page: ft.Page, text: str) -> bool:
@@ -142,48 +112,10 @@ def copy_to_clipboard(page: ft.Page, text: str) -> bool:
     return success
 
 
-def nb_button(label: str, icon: str = "", on_click=None, bgcolor=BG_WHITE, color=TEXT_DARK, width=None) -> ft.Container:
-    row_items = []
-    if icon:
-        row_items.append(ft.Text(icon, size=15, color=color))
-    row_items.append(ft.Text(label.upper(), size=12, weight=ft.FontWeight.W_800, color=color))
-
-    return ft.Container(
-        content=ft.Row(row_items, spacing=8, alignment=ft.MainAxisAlignment.CENTER),
-        bgcolor=bgcolor,
-        border=mk_border(2, TEXT_DARK),
-        shadow=SHADOW_SM,
-        padding=pad(h=16, v=12),
-        width=width,
-        on_click=on_click,
-        ink=True,
-    )
-
-
-def nb_card(content: ft.Control, shadow_size: str = "md", bgcolor=BG_WHITE, padding=24) -> ft.Container:
-    shadow = {"sm": SHADOW_SM, "md": SHADOW_MD, "lg": SHADOW_LG}.get(shadow_size, SHADOW_MD)
-    return ft.Container(
-        content=content,
-        bgcolor=bgcolor,
-        border=mk_border(3, TEXT_DARK),
-        border_radius=0,
-        shadow=shadow,
-        padding=padding,
-    )
-
-
-def label_text(text: str) -> ft.Text:
-    return ft.Text(text.upper(), size=11, weight=ft.FontWeight.W_700, color=TEXT_GRAY, style=ft.TextStyle(letter_spacing=1.8))
-
-
-def heading_text(text: str, size: int = 36) -> ft.Text:
-    return ft.Text(text.upper(), size=size, weight=ft.FontWeight.W_900, color=TEXT_DARK)
-
-
 def speak_text(page: ft.Page, text: str, voice: str = None):
     """
     Phát âm từ vựng bằng Edge-TTS (Microsoft Azure Neural Voice).
-    Hỗ trợ Smart Caching và Native Windows MCI Audio Player (không giật lag, không block UI).
+    Âm thanh được cache; Windows desktop dùng MCI/SAPI, web phát ở máy người dùng.
     Mặc định sử dụng chuẩn giọng Anh - Anh (en-GB-SoniaNeural).
     """
     import tts_processor
@@ -193,34 +125,24 @@ def speak_text(page: ft.Page, text: str, voice: str = None):
 
     def on_err(e):
         if page:
-            page.snack_bar = ft.SnackBar(
-                ft.Text(f"🔊 Không thể tải âm thanh online: {e}", color=TEXT_WHITE),
+            page.show_dialog(ft.SnackBar(
+                ft.Text(f"Không thể phát âm thanh: {e}", color=TEXT_WHITE),
                 bgcolor=TEXT_DARK
-            )
-            page.snack_bar.open = True
+            ))
             page.update()
 
-    tts_processor.speak(text, voice=act_voice, rate=rate, on_error=on_err)
+    if os.name == "nt" and not page.web:
+        tts_processor.speak(text, voice=act_voice, rate=rate, on_error=on_err)
+    else:
+        page.data["audio_player"].speak(text, voice=act_voice, rate=rate, on_error=on_err)
 
 
 def safe_close_dialog(page: ft.Page, dlg: ft.Control):
-    """Đóng AlertDialog an toàn và giải phóng khỏi page.overlay."""
+    """Close the intended dialog rather than a more recent notification."""
     try:
-        if hasattr(page, "pop_dialog"):
-            page.pop_dialog()
-            return
-    except Exception:
-        pass
-    try:
-        dlg.open = False
-        page.update()
-    except Exception:
-        pass
-    try:
-        if dlg in page.overlay:
-            page.overlay.remove(dlg)
-    except Exception:
-        pass
+        close_dialog(dlg)
+    except RuntimeError:
+        pass  # The dialog may already have been removed from its page.
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -327,10 +249,7 @@ def show_vocab_list_dialog(page: ft.Page, initial_mode: str = "all", on_navigate
     count_txt = ft.Text("", size=11, weight=ft.FontWeight.W_700, color=TEXT_GRAY)
 
     def close_dlg(e=None):
-        try:
-            page.pop_dialog()
-        except Exception:
-            safe_close_dialog(page, dlg)
+        safe_close_dialog(page, dlg)
 
     def nav_to_lessons(e=None):
         close_dlg()
@@ -787,16 +706,14 @@ def show_log_viewer_dialog(page: ft.Page):
                 lines.append(it["exc_text"])
         text_to_copy = "\n".join(lines)
         copy_to_clipboard(page, text_to_copy)
-        page.snack_bar = ft.SnackBar(ft.Text(f"✓ Đã sao chép {len(entries)} bản ghi log vào Clipboard!"), bgcolor=TEXT_DARK)
-        page.snack_bar.open = True
+        page.show_dialog(ft.SnackBar(ft.Text(f"✓ Đã sao chép {len(entries)} bản ghi log vào Clipboard!"), bgcolor=TEXT_DARK))
         page.update()
 
     def clear_memory_logs(e=None):
         if mem_handler:
             mem_handler.clear()
         refresh_logs()
-        page.snack_bar = ft.SnackBar(ft.Text("✓ Đã xóa sạch bộ đệm nhật ký trên UI."), bgcolor=TEXT_DARK)
-        page.snack_bar.open = True
+        page.show_dialog(ft.SnackBar(ft.Text("✓ Đã xóa sạch bộ đệm nhật ký trên UI."), bgcolor=TEXT_DARK))
         page.update()
 
     dlg = ft.AlertDialog(
@@ -846,100 +763,12 @@ def show_log_viewer_dialog(page: ft.Page):
     refresh_logs()
 
 
-def build_dashboard(page: ft.Page, on_navigate) -> ft.Control:
-    vocab_count  = get_total_vocab_count()
-    lesson_count = get_total_lesson_count()
-    mastered     = get_mastered_count()
-
-    def stat_card(icon: ft.IconData, value: str, lbl: str, border_c: str, on_click=None, tooltip: str = None) -> ft.Container:
-        return ft.Container(
-            content=ft.Column(
-                [
-                    ft.Icon(icon, size=26, color=border_c),
-                    ft.Text(value, size=34, weight=ft.FontWeight.W_900, color=TEXT_DARK),
-                    ft.Container(height=2),
-                    ft.Text(lbl.upper(), size=11, weight=ft.FontWeight.W_700, color=TEXT_GRAY, style=ft.TextStyle(letter_spacing=1.5)),
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=4,
-            ),
-            bgcolor=BG_WHITE,
-            border=mk_border(3, border_c),
-            shadow=ft.BoxShadow(offset=ft.Offset(3, 3), blur_radius=0, color=border_c),
-            padding=pad(h=20, v=22),
-            expand=True,
-            on_click=on_click,
-            ink=True if on_click else False,
-            tooltip=tooltip,
-        )
-
-    tip_card = nb_card(
-        ft.Row([
-            ft.Container(
-                content=ft.Icon(ft.Icons.LIGHTBULB_OUTLINE_ROUNDED, size=22, color=TEXT_DARK),
-                bgcolor=CLR_YELLOW,
-                border=mk_border(2, TEXT_DARK),
-                padding=pad(all_=10),
-            ),
-            ft.Column([
-                ft.Text("TẠO BÀI HỌC ĐẦU TIÊN" if lesson_count == 0 else "TIẾP TỤC HỌC", size=14, weight=ft.FontWeight.W_900, color=TEXT_DARK),
-                ft.Text("Thêm từ vựng bằng tay, nhập JSON hoặc tạo bài học với AI." if lesson_count == 0 else "Ôn lại flashcard hoặc luyện đọc hiểu trong bài học của bạn.", size=13, color=TEXT_GRAY),
-            ], spacing=4, expand=True),
-            nb_button("TẠO BÀI HỌC" if lesson_count == 0 else "HỌC NGAY", on_click=lambda e: on_navigate("create" if lesson_count == 0 else "lessons"), bgcolor=TEXT_DARK, color=TEXT_WHITE)
-        ], spacing=16),
-        shadow_size="sm",
-    )
-
-    return ft.Column(
-        [
-            label_text("Tổng quan"),
-            heading_text("Góc học tập"),
-            ft.Container(height=1, bgcolor=TEXT_DARK, margin=marg(top=6, bottom=20)),
-            ft.Row(
-                [
-                    stat_card(
-                        ft.Icons.ABC_ROUNDED,
-                        str(vocab_count),
-                        "Từ vựng",
-                        TEXT_DARK,
-                        on_click=lambda e: show_vocab_list_dialog(page, initial_mode="all", on_navigate=on_navigate),
-                        tooltip="Xem danh sách từ vựng trong tất cả các bài học",
-                    ),
-                    stat_card(
-                        ft.Icons.MENU_BOOK_ROUNDED,
-                        str(lesson_count),
-                        "Bài học",
-                        TEXT_DARK,
-                        on_click=lambda e: on_navigate("lessons"),
-                        tooltip="Chuyển sang màn hình Bài học",
-                    ),
-                    stat_card(
-                        ft.Icons.TASK_ALT_ROUNDED,
-                        str(mastered),
-                        "Đã thuộc",
-                        "#166534",
-                        on_click=lambda e: show_vocab_list_dialog(page, initial_mode="mastered", on_navigate=on_navigate),
-                        tooltip="Xem danh sách từ vựng đã thuộc (Điểm >= 6)",
-                    ),
-                ],
-                spacing=20,
-            ),
-            ft.Container(height=16),
-            tip_card,
-        ],
-        spacing=0,
-        expand=True,
-        scroll=ft.ScrollMode.AUTO,
-    )
-
-
 def handle_export_lesson(page: ft.Page, lesson_id: int, lesson_title: str):
     """Xuất bài học ra tệp JSON chuẩn, hỗ trợ mở thư mục và copy vào clipboard."""
     try:
         filepath = export_lesson_to_file(lesson_id)
         if not filepath:
-            page.snack_bar = ft.SnackBar(ft.Text("Không tìm thấy dữ liệu bài học để xuất."), bgcolor="#991b1b")
-            page.snack_bar.open = True
+            page.show_dialog(ft.SnackBar(ft.Text("Không tìm thấy dữ liệu bài học để xuất."), bgcolor="#991b1b"))
             page.update()
             return
 
@@ -955,8 +784,7 @@ def handle_export_lesson(page: ft.Page, lesson_id: int, lesson_title: str):
 
         def copy_json(e):
             copy_to_clipboard(page, json_str)
-            page.snack_bar = ft.SnackBar(ft.Text("✓ Đã sao chép toàn bộ JSON bài học vào Clipboard!"), bgcolor="#166534")
-            page.snack_bar.open = True
+            page.show_dialog(ft.SnackBar(ft.Text("✓ Đã sao chép toàn bộ JSON bài học vào Clipboard!"), bgcolor="#166534"))
             page.update()
 
         dlg = ft.AlertDialog(
@@ -986,8 +814,7 @@ def handle_export_lesson(page: ft.Page, lesson_id: int, lesson_title: str):
         )
         page.show_dialog(dlg)
     except Exception as ex:
-        page.snack_bar = ft.SnackBar(ft.Text(f"Lỗi khi xuất bài học: {ex}"), bgcolor="#991b1b")
-        page.snack_bar.open = True
+        page.show_dialog(ft.SnackBar(ft.Text(f"Lỗi khi xuất bài học: {ex}"), bgcolor="#991b1b"))
         page.update()
 
 
@@ -999,7 +826,7 @@ def build_lessons_screen(page: ft.Page, on_start_session, on_edit_lesson) -> ft.
     def show_flashcard_mode_dialog(lesson_id: int):
         """Hiện dialog cho phép user chọn chế độ Flashcard: Đảo thẻ hoặc Giữ nguyên thứ tự."""
         def close_and_navigate(shuffle: bool):
-            page.pop_dialog()
+            safe_close_dialog(page, dlg)
             on_start_session("flashcard", lesson_id, shuffle=shuffle)
 
         def on_shuffled(e):
@@ -1026,7 +853,7 @@ def build_lessons_screen(page: ft.Page, on_start_session, on_edit_lesson) -> ft.
     def show_reading_mode_dialog(lesson_id: int):
         """Hiện dialog cho phép user chọn chế độ Đọc hiểu: Đảo câu hoặc Không đảo câu."""
         def close_and_navigate(shuffle: bool):
-            page.pop_dialog()
+            safe_close_dialog(page, dlg)
             on_start_session("reading", lesson_id, shuffle=shuffle)
 
         def on_shuffled(e):
@@ -1156,7 +983,7 @@ def build_lessons_screen(page: ft.Page, on_start_session, on_edit_lesson) -> ft.
             modal=True,
             title=ft.Row([
                 ft.Text("📖 HƯỚNG DẪN HỌC", size=18, weight=ft.FontWeight.W_900, color=TEXT_DARK, expand=True),
-                ft.IconButton(ft.Icons.CLOSE, on_click=lambda e: page.pop_dialog(), icon_color=TEXT_DARK),
+                ft.IconButton(ft.Icons.CLOSE, on_click=lambda e: safe_close_dialog(page, dlg), icon_color=TEXT_DARK),
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             content=ft.Column([
                 ft.Row([fc_tab_btn, rd_tab_btn], spacing=10),
@@ -1252,67 +1079,6 @@ def build_lessons_screen(page: ft.Page, on_start_session, on_edit_lesson) -> ft.
     )
 
 
-def build_random_screen(page: ft.Page, on_start_session) -> ft.Control:
-    total = get_total_vocab_count()
-    error_ref = ft.Text("", color="#991b1b", weight=ft.FontWeight.W_700, size=13)
-
-    n_field = ft.TextField(
-        hint_text="Nhập số...",
-        keyboard_type=ft.KeyboardType.NUMBER,
-        text_style=ft.TextStyle(size=22, weight=ft.FontWeight.W_900, color=TEXT_DARK),
-        hint_style=ft.TextStyle(color=TEXT_GRAY, size=22),
-        border_color=TEXT_DARK,
-        border_width=3,
-        border_radius=0,
-        filled=True,
-        fill_color=BG_WHITE,
-        width=180,
-        text_align=ft.TextAlign.CENTER,
-        content_padding=pad(h=16, v=14),
-    )
-
-    def on_start(e):
-        error_ref.value = ""
-        try:
-            if total == 0:
-                raise ValueError("Kho từ vựng hiện đang trống. Hãy tạo bài học trước!")
-            n = int(n_field.value or "0")
-            if n <= 0:
-                raise ValueError("Số phải lớn hơn 0")
-            if n > total:
-                raise ValueError(f"Chỉ có {total} từ trong kho")
-            
-            on_start_session("random_flashcard", n)
-        except ValueError as ex:
-            error_ref.value = str(ex)
-        page.update()
-
-    return ft.Column(
-        [
-            label_text("Luyện tập"),
-            heading_text("Học ngẫu nhiên"),
-            ft.Container(height=1, bgcolor=TEXT_DARK, margin=marg(top=6, bottom=20)),
-            ft.Row([
-                nb_card(
-                    ft.Column([
-                        ft.Text("CHỌN SỐ TỪ VỰNG NGẪU NHIÊN", size=13, weight=ft.FontWeight.W_700, color=TEXT_GRAY, style=ft.TextStyle(letter_spacing=1.5)),
-                        ft.Container(height=6),
-                        ft.Text(f"Tổng kho hiện có: {total} từ", size=13, color=TEXT_GRAY),
-                        ft.Container(height=20),
-                        n_field,
-                        ft.Container(height=6),
-                        error_ref,
-                        ft.Container(height=20),
-                        nb_button("Bắt đầu học", on_click=on_start, icon="🎲", bgcolor=TEXT_DARK, color=TEXT_WHITE, width=260),
-                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0),
-                    padding=40, shadow_size="lg",
-                )
-            ], alignment=ft.MainAxisAlignment.CENTER),
-        ],
-        spacing=0, expand=True,
-    )
-
-
 def build_create_screen(page: ft.Page, on_success, on_lock_nav=None) -> ft.Control:
     is_generating = {"status": False}
     # Tab 1: Nhập tay trực tiếp
@@ -1376,8 +1142,7 @@ def build_create_screen(page: ft.Page, on_success, on_lock_nav=None) -> ft.Contr
             
             res = load_lesson_from_dict(lesson_dict)
             if res["success"]:
-                page.snack_bar = ft.SnackBar(ft.Text("✓ Tạo bài học thành công!"), bgcolor="#166534")
-                page.snack_bar.open = True
+                page.show_dialog(ft.SnackBar(ft.Text("✓ Tạo bài học thành công!"), bgcolor="#166534"))
                 on_success()
             else:
                 error_txt.value = "\n".join(res["errors"])
@@ -1400,8 +1165,7 @@ def build_create_screen(page: ft.Page, on_success, on_lock_nav=None) -> ft.Contr
             res = load_lesson_from_dict(data)
             if res["success"]:
                 msg = "✓ Nạp mảng từ vựng JSON Array thành công!" if is_array else "✓ Nạp bài học bằng JSON thành công!"
-                page.snack_bar = ft.SnackBar(ft.Text(msg), bgcolor="#166534")
-                page.snack_bar.open = True
+                page.show_dialog(ft.SnackBar(ft.Text(msg), bgcolor="#166534"))
                 on_success()
             else:
                 error_txt.value = "\n".join(res["errors"])
@@ -1443,8 +1207,7 @@ def build_create_screen(page: ft.Page, on_success, on_lock_nav=None) -> ft.Contr
 
     def copy_manual_sample(e):
         copy_to_clipboard(page, manual_sample_json)
-        page.snack_bar = ft.SnackBar(ft.Text("📋 Đã sao chép mẫu JSON Array vào bộ nhớ tạm!"), bgcolor="#166534")
-        page.snack_bar.open = True
+        page.show_dialog(ft.SnackBar(ft.Text("📋 Đã sao chép mẫu JSON Array vào bộ nhớ tạm!"), bgcolor="#166534"))
         try:
             page.update()
         except Exception:
@@ -1454,7 +1217,7 @@ def build_create_screen(page: ft.Page, on_success, on_lock_nav=None) -> ft.Contr
         content=ft.Column([
             ft.Row([
                 ft.Text("MẪU JSON ARRAY", size=9, weight=ft.FontWeight.W_800, color=TEXT_GRAY, style=ft.TextStyle(letter_spacing=1.5), expand=True),
-                ft.TextButton("📋 Copy", on_click=copy_manual_sample, style=ft.ButtonStyle(color="#3730a3")),
+                ft.TextButton("Sao chép", icon=ft.Icons.CONTENT_COPY_ROUNDED, on_click=copy_manual_sample, style=ft.ButtonStyle(color="#3730a3")),
             ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
             ft.Container(height=4),
             ft.Text(
@@ -1468,12 +1231,12 @@ def build_create_screen(page: ft.Page, on_success, on_lock_nav=None) -> ft.Contr
         bgcolor="#f9fafb",
         border=mk_border(1, "#d1d5db"),
         padding=pad(h=12, v=10),
-        width=280,
+        col={"xs": 12, "lg": 4},
         height=380,
     )
 
     manual_view = ft.Column([
-        ft.Row([
+        ft.ResponsiveRow([
             ft.Column([
                 ft.Container(height=10),
                 title_inp,
@@ -1481,8 +1244,7 @@ def build_create_screen(page: ft.Page, on_success, on_lock_nav=None) -> ft.Contr
                 vocab_raw_inp,
                 ft.Container(height=10),
                 nb_button("Tạo bài học", on_click=submit_form, bgcolor=TEXT_DARK, color=TEXT_WHITE)
-            ], expand=True, spacing=10, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
-            ft.VerticalDivider(width=1, color="#d1d5db"),
+            ], col={"xs": 12, "lg": 8}, spacing=10, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
             vocab_preview,
         ], spacing=16, vertical_alignment=ft.CrossAxisAlignment.START)
     ], scroll=ft.ScrollMode.AUTO, expand=True, spacing=0)
@@ -1593,8 +1355,7 @@ def build_create_screen(page: ft.Page, on_success, on_lock_nav=None) -> ft.Contr
         val = array_sample_json if current_mode["type"] == "array" else full_sample_json
         copy_to_clipboard(page, val)
         lbl = "Mảng JSON Array" if current_mode["type"] == "array" else "Mẫu JSON toàn bài"
-        page.snack_bar = ft.SnackBar(ft.Text(f"📋 Đã sao chép {lbl} vào bộ nhớ tạm!"), bgcolor="#166534")
-        page.snack_bar.open = True
+        page.show_dialog(ft.SnackBar(ft.Text(f"📋 Đã sao chép {lbl} vào bộ nhớ tạm!"), bgcolor="#166534"))
         try:
             page.update()
         except Exception:
@@ -1621,7 +1382,7 @@ def build_create_screen(page: ft.Page, on_success, on_lock_nav=None) -> ft.Contr
         ft.Column([
             ft.Row([
                 ft.Row([btn_mode_array, btn_mode_full], spacing=4),
-                ft.TextButton("📋 Copy", on_click=copy_active_sample, style=ft.ButtonStyle(color="#3730a3")),
+                ft.TextButton("Sao chép", icon=ft.Icons.CONTENT_COPY_ROUNDED, on_click=copy_active_sample, style=ft.ButtonStyle(color="#3730a3")),
             ], vertical_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ft.Container(height=6),
             sample_text_ctl
@@ -1629,18 +1390,17 @@ def build_create_screen(page: ft.Page, on_success, on_lock_nav=None) -> ft.Contr
         shadow_size="sm",
         bgcolor="#f9fafb",
     )
-    json_guide.width = 320
+    json_guide.col = {"xs": 12, "lg": 4}
     json_guide.height = 380
 
     json_view = ft.Column([
-        ft.Row([
+        ft.ResponsiveRow([
             ft.Column([
                 ft.Container(height=10),
                 json_text_inp,
                 ft.Container(height=10),
                 nb_button("Nạp bài học bằng JSON", on_click=submit_json, bgcolor=TEXT_DARK, color=TEXT_WHITE)
-            ], expand=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
-            ft.VerticalDivider(width=1, color=TEXT_DARK),
+            ], col={"xs": 12, "lg": 8}, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
             json_guide
         ], spacing=20, vertical_alignment=ft.CrossAxisAlignment.START)
     ], scroll=ft.ScrollMode.AUTO, expand=True, spacing=0)
@@ -1653,11 +1413,10 @@ def build_create_screen(page: ft.Page, on_success, on_lock_nav=None) -> ft.Contr
 
     def switch_tab(tab_name):
         if is_generating["status"]:
-            page.snack_bar = ft.SnackBar(
+            page.show_dialog(ft.SnackBar(
                 ft.Text("🔒 AI đang tạo bài học. Vui lòng đợi hoàn thành!"),
                 bgcolor="#991b1b"
-            )
-            page.snack_bar.open = True
+            ))
             try:
                 page.update()
             except Exception:
@@ -2354,6 +2113,8 @@ def build_pipeline_tab_content(page: ft.Page, on_success, on_lock_nav=None, is_g
 
     # ── Start pipeline ────────────────────────────────────────────────────────
     def do_start(e=None):
+        if pipeline_state["running"]:
+            return
         pl_error_txt.value = ""
 
         vocab_raw = (pl_vocab_inp.value or "").strip()
@@ -2428,7 +2189,7 @@ def build_pipeline_tab_content(page: ft.Page, on_success, on_lock_nav=None, is_g
             "difficulty": "hard",
             "narrative_density": "high",
         }
-        custom_preset_name = pl_custom_preset_inp.value.strip()
+        custom_preset_name = (pl_custom_preset_inp.value or "").strip()
         if _is_custom(pl_preset_dropdown.value) and custom_preset_name:
             taxonomy_settings["story_style"] = custom_preset_name
 
@@ -2462,25 +2223,33 @@ def build_pipeline_tab_content(page: ft.Page, on_success, on_lock_nav=None, is_g
         _add_log(f"Vocab: {vocab_raw}", "INFO")
         _add_log(f"Seed story: {seed_story[:80]}...", "INFO")
 
-        user_notes = pl_notes_inp.value.strip()
+        user_notes = (pl_notes_inp.value or "").strip()
         if user_notes:
             _add_log(f"Ghi chú cá nhân: {user_notes[:120]}{'...' if len(user_notes) > 120 else ''}", "INFO")
 
         def worker():
-            from lesson_pipeline import run_lesson_pipeline
-            result = run_lesson_pipeline(
-                vocab_list=vocab_list,
-                seed_story=seed_story,
-                num_questions=num_q,
-                taxonomy_settings=taxonomy_settings,
-                provider=provider,
-                model=model,
-                api_key=api_key,
-                timeout=timeout,
-                on_progress=_on_progress,
-                stop_event=stop_event,
-                user_notes=user_notes,
-            )
+            try:
+                from lesson_pipeline import run_lesson_pipeline
+                result = run_lesson_pipeline(
+                    vocab_list=vocab_list,
+                    seed_story=seed_story,
+                    num_questions=num_q,
+                    taxonomy_settings=taxonomy_settings,
+                    provider=provider,
+                    model=model,
+                    api_key=api_key,
+                    timeout=timeout,
+                    on_progress=lambda info: _on_progress(info)
+                        if pipeline_state["stop_event"] is stop_event and not stop_event.is_set() else None,
+                    stop_event=stop_event,
+                    user_notes=user_notes,
+                )
+            except Exception as exc:
+                logger.exception("Lỗi không mong đợi trong pipeline")
+                result = {"success": False, "error": str(exc)}
+            # A cancelled/previous run must never overwrite a newer run's UI.
+            if pipeline_state["stop_event"] is not stop_event or stop_event.is_set():
+                return
             pipeline_state["result"] = result
             pipeline_state["running"] = False
 
@@ -2517,7 +2286,9 @@ def build_pipeline_tab_content(page: ft.Page, on_success, on_lock_nav=None, is_g
         if stop_event:
             stop_event.set()
         pipeline_state["running"] = False
-        pl_step_label.value = "✕ Đã hủy theo yêu cầu."
+        pipeline_state["result"] = None
+        pl_save_btn.visible = False
+        pl_step_label.value = "Đã hủy. Bạn có thể bắt đầu lượt mới."
         pl_step_label.color = "#991b1b"
         pl_start_btn.visible = True
         pl_cancel_btn.visible = False
@@ -2539,7 +2310,7 @@ def build_pipeline_tab_content(page: ft.Page, on_success, on_lock_nav=None, is_g
             return
         try:
             from ingestion import load_lesson_from_dict
-            custom_preset_name = pl_custom_preset_inp.value.strip()
+            custom_preset_name = (pl_custom_preset_inp.value or "").strip()
             preset_name = custom_preset_name if (_is_custom(pl_preset_dropdown.value) and custom_preset_name) else pl_preset_dropdown.value
             lesson_dict = {
                 "title": pl_story_inp.value.strip()[:50] or f"Bài học {preset_name}",
@@ -2551,8 +2322,7 @@ def build_pipeline_tab_content(page: ft.Page, on_success, on_lock_nav=None, is_g
             }
             db_res = load_lesson_from_dict(lesson_dict)
             if db_res["success"]:
-                page.snack_bar = ft.SnackBar(ft.Text("✓ Lưu bài học thành công!"), bgcolor="#166534")
-                page.snack_bar.open = True
+                page.show_dialog(ft.SnackBar(ft.Text("✓ Lưu bài học thành công!"), bgcolor="#166534"))
                 if on_lock_nav:
                     on_lock_nav(False)
                 on_success()
@@ -2681,8 +2451,7 @@ def build_settings_screen(page: ft.Page) -> ft.Control:
             container.content.controls[0].color = TEXT_DARK if active else TEXT_GRAY
             container.update()
 
-        page.snack_bar = ft.SnackBar(ft.Text(f"✓ Đã lưu Whisper model: {model_name}"), bgcolor=TEXT_DARK)
-        page.snack_bar.open = True
+        page.show_dialog(ft.SnackBar(ft.Text(f"✓ Đã lưu Whisper model: {model_name}"), bgcolor=TEXT_DARK))
         page.update()
 
     def select_device(device_name: str):
@@ -2699,8 +2468,7 @@ def build_settings_screen(page: ft.Page) -> ft.Control:
             container.content.controls[0].color = TEXT_DARK if active else TEXT_GRAY
             container.update()
 
-        page.snack_bar = ft.SnackBar(ft.Text(f"✓ Đã chọn thiết bị: {device_name.upper()}"), bgcolor=TEXT_DARK)
-        page.snack_bar.open = True
+        page.show_dialog(ft.SnackBar(ft.Text(f"✓ Đã chọn thiết bị: {device_name.upper()}"), bgcolor=TEXT_DARK))
         page.update()
 
     def model_row(name: str, desc: str) -> ft.Container:
@@ -2795,8 +2563,7 @@ def build_settings_screen(page: ft.Page) -> ft.Control:
             c.content.controls[0].value = "●" if active else "○"
             c.content.controls[0].color = TEXT_DARK if active else TEXT_GRAY
             c.update()
-        page.snack_bar = ft.SnackBar(ft.Text(f"✓ Đã chọn giọng đọc: {vname}"), bgcolor=TEXT_DARK)
-        page.snack_bar.open = True
+        page.show_dialog(ft.SnackBar(ft.Text(f"✓ Đã chọn giọng đọc: {vname}"), bgcolor=TEXT_DARK))
         page.update()
 
     def tts_voice_row(vname: str, label: str, desc: str) -> ft.Container:
@@ -2830,8 +2597,7 @@ def build_settings_screen(page: ft.Page) -> ft.Control:
             c.content.controls[0].value = "●" if active else "○"
             c.content.controls[0].color = TEXT_DARK if active else TEXT_GRAY
             c.update()
-        page.snack_bar = ft.SnackBar(ft.Text(f"✓ Tốc độ phát âm: {rval}"), bgcolor=TEXT_DARK)
-        page.snack_bar.open = True
+        page.show_dialog(ft.SnackBar(ft.Text(f"✓ Tốc độ phát âm: {rval}"), bgcolor=TEXT_DARK))
         page.update()
 
     def tts_rate_row(rval: str, label: str) -> ft.Container:
@@ -2947,8 +2713,7 @@ def build_settings_screen(page: ft.Page) -> ft.Control:
             c.content.controls[0].value = "●" if active else "○"
             c.content.controls[0].color = TEXT_DARK if active else TEXT_GRAY
             c.update()
-        page.snack_bar = ft.SnackBar(ft.Text(f"✓ AI Provider: {pname.upper()}"), bgcolor=TEXT_DARK)
-        page.snack_bar.open = True
+        page.show_dialog(ft.SnackBar(ft.Text(f"✓ AI Provider: {pname.upper()}"), bgcolor=TEXT_DARK))
         page.update()
 
     def provider_row(pname: str, label: str, desc: str) -> ft.Container:
@@ -2982,8 +2747,7 @@ def build_settings_screen(page: ft.Page) -> ft.Control:
         except ValueError:
             settings["pipeline_timeout"] = 120
         save_settings(settings)
-        page.snack_bar = ft.SnackBar(ft.Text("✓ Đã lưu cài đặt Pipeline!"), bgcolor="#166534")
-        page.snack_bar.open = True
+        page.show_dialog(ft.SnackBar(ft.Text("✓ Đã lưu cài đặt Pipeline!"), bgcolor="#166534"))
         page.update()
 
     ai_provider_card = nb_card(
@@ -3038,8 +2802,7 @@ def build_settings_screen(page: ft.Page) -> ft.Control:
             container.content.controls[0].color = TEXT_DARK if active else TEXT_GRAY
             container.update()
 
-        page.snack_bar = ft.SnackBar(ft.Text(f"✓ Đã đặt mức ghi log: {lvl_name}"), bgcolor=TEXT_DARK)
-        page.snack_bar.open = True
+        page.show_dialog(ft.SnackBar(ft.Text(f"✓ Đã đặt mức ghi log: {lvl_name}"), bgcolor=TEXT_DARK))
         page.update()
 
     def log_level_row(lvl_name: str, desc: str) -> ft.Container:
@@ -3071,8 +2834,7 @@ def build_settings_screen(page: ft.Page) -> ft.Control:
                 subprocess.Popen(["xdg-open", str(logs_dir)])
         except Exception as ex:
             logger.error(f"Lỗi khi mở thư mục logs: {ex}")
-            page.snack_bar = ft.SnackBar(ft.Text(f"Không thể mở thư mục: {ex}"), bgcolor="#991b1b")
-            page.snack_bar.open = True
+            page.show_dialog(ft.SnackBar(ft.Text(f"Không thể mở thư mục: {ex}"), bgcolor="#991b1b"))
             page.update()
 
     def generate_test_logs(e=None):
@@ -3085,14 +2847,12 @@ def build_settings_screen(page: ft.Page) -> ft.Control:
         except Exception as ex:
             test_logger.error(f"Kiểm tra log mức ERROR: {ex}", exc_info=True)
         
-        page.snack_bar = ft.SnackBar(ft.Text("✓ Đã sinh 4 bản ghi log kiểm tra (DEBUG, INFO, WARN, ERROR)!"), bgcolor="#166534")
-        page.snack_bar.open = True
+        page.show_dialog(ft.SnackBar(ft.Text("✓ Đã sinh 4 bản ghi log kiểm tra (DEBUG, INFO, WARN, ERROR)!"), bgcolor="#166534"))
         page.update()
 
     def do_clean_old_logs(e=None):
         deleted = clean_old_logs(days=14)
-        page.snack_bar = ft.SnackBar(ft.Text(f"✓ Đã dọn dẹp {deleted} tệp log cũ quá 14 ngày."), bgcolor="#166534")
-        page.snack_bar.open = True
+        page.show_dialog(ft.SnackBar(ft.Text(f"✓ Đã dọn dẹp {deleted} tệp log cũ quá 14 ngày."), bgcolor="#166534"))
         page.update()
 
     logs_dir_path = get_logs_dir()
@@ -3145,7 +2905,6 @@ def build_settings_screen(page: ft.Page) -> ft.Control:
         ],
         spacing=0, expand=True, scroll=ft.ScrollMode.AUTO,
     )
-
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3504,7 +3263,6 @@ def build_random_flashcard_session(page: ft.Page, count: int, on_exit) -> ft.Con
         card_area.content = ft.Text("Không lấy được từ vựng nào.", size=14, color=TEXT_GRAY)
 
     return session_view
-
 
 
 def build_lesson_editor(page: ft.Page, lesson_id: int, on_back) -> ft.Control:
@@ -3900,8 +3658,7 @@ def build_lesson_editor(page: ft.Page, lesson_id: int, on_back) -> ft.Control:
             import_json_f.value = ""
             toggle_import()
             refresh_vocab_list()
-            page.snack_bar = ft.SnackBar(ft.Text(f"✓ Import {added} từ vựng thành công!"), bgcolor="#166534")
-            page.snack_bar.open = True
+            page.show_dialog(ft.SnackBar(ft.Text(f"✓ Import {added} từ vựng thành công!"), bgcolor="#166534"))
             page.update()
         except Exception as ex:
             import_err_txt.value = f"JSON không hợp lệ: {ex}"; import_err_txt.update()
@@ -3944,8 +3701,7 @@ def build_lesson_editor(page: ft.Page, lesson_id: int, on_back) -> ft.Control:
             vocab_ids_json=new_ids,
             thumbnail=state["thumbnail"] or None,
         )
-        page.snack_bar = ft.SnackBar(ft.Text("✓ Đã lưu bài học thành công!"), bgcolor="#166534")
-        page.snack_bar.open = True
+        page.show_dialog(ft.SnackBar(ft.Text("✓ Đã lưu bài học thành công!"), bgcolor="#166534"))
         page.update()
 
     def on_keyboard_event(e):
@@ -3956,16 +3712,15 @@ def build_lesson_editor(page: ft.Page, lesson_id: int, on_back) -> ft.Control:
 
     def confirm_delete_lesson(e):
         def do_delete(e2):
-            page.pop_dialog()
+            safe_close_dialog(page, del_dlg)
             page.on_keyboard_event = None
             safe_overlay_remove(file_picker)
             delete_lesson(lesson_id)
-            page.snack_bar = ft.SnackBar(ft.Text("✓ Đã xóa bài học thành công!"), bgcolor="#166534")
-            page.snack_bar.open = True
+            page.show_dialog(ft.SnackBar(ft.Text("✓ Đã xóa bài học thành công!"), bgcolor="#166534"))
             on_back()
 
         def cancel_delete(e2):
-            page.pop_dialog()
+            safe_close_dialog(page, del_dlg)
 
         del_dlg = ft.AlertDialog(
             modal=True,
@@ -4189,85 +3944,6 @@ def build_reading_session(page: ft.Page, lesson_id: int, on_exit, shuffle: bool 
 # ── SIDEBAR ───────────────────────────────────────────────────────────────────
 # ══════════════════════════════════════════════════════════════════════════════
 
-def build_sidebar(current: str, on_navigate, on_open_logs=None) -> ft.Container:
-    def nav_item(route: str, icon: ft.IconData, label: str) -> ft.Container:
-        active = route == current
-
-        def on_hover(e):
-            if not active:
-                e.control.bgcolor = "#1f2937" if e.data == "true" else "transparent"
-                e.control.update()
-
-        return ft.Container(
-            content=ft.Row([
-                ft.Icon(icon, size=20, color=TEXT_DARK if active else "#cbd5e1"),
-                ft.Text(label, size=12, weight=ft.FontWeight.W_800, color=TEXT_DARK if active else TEXT_WHITE),
-            ], spacing=10),
-            data=route,
-            bgcolor=BG_WHITE if active else "transparent",
-            border=mk_border(2, TEXT_DARK) if active else mk_border(0, "transparent"),
-            padding=pad(h=16, v=13),
-            margin=marg(left=12, right=12),
-            on_click=lambda e, r=route: on_navigate(r),
-            on_hover=on_hover,
-            ink=not active,
-            animate=ft.Animation(100, ft.AnimationCurve.EASE_OUT),
-        )
-
-    # Thanh nhấn cố định; không giãn theo chiều cao sidebar.
-    rainbow = ft.Container(
-        gradient=ft.LinearGradient(
-            begin=ft.Alignment(-1, 0),
-            end=ft.Alignment(1, 0),
-            colors=["#bfdbfe", "#c4b5fd", "#bbf7d0"],
-        ),
-        height=5,
-    )
-
-    return ft.Container(
-        content=ft.Column(
-            [
-                rainbow,
-                ft.Container(
-                    content=ft.Column([
-                        ft.Text("VOCAB", size=24, weight=ft.FontWeight.W_900, color=TEXT_WHITE),
-                        ft.Text("1337",  size=24, weight=ft.FontWeight.W_900, color=CLR_YELLOW),
-                    ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                    alignment=ft.Alignment(0, 0),
-                    padding=pad(top=26, bottom=12),
-                ),
-                ft.Container(height=20),
-                ft.Container(height=1, bgcolor="#374151"),
-                ft.Container(height=10),
-                *[nav_item(r, i, l) for r, i, l in NAV_ITEMS],
-                ft.Container(expand=True),
-                ft.Container(height=1, bgcolor="#374151"),
-                ft.Container(
-                    content=ft.Row([
-                        ft.Icon(ft.Icons.TERMINAL_ROUNDED, size=16, color="#cbd5e1"),
-                        ft.Text("NHẬT KÝ HỆ THỐNG", size=10, weight=ft.FontWeight.W_800, color=TEXT_WHITE),
-                    ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
-                    bgcolor="#1f2937",
-                    border=mk_border(1, "#374151"),
-                    padding=pad(h=8, v=6),
-                    margin=marg(left=10, right=10, top=6, bottom=2),
-                    on_click=lambda e: on_open_logs() if on_open_logs else None,
-                    ink=True,
-                    tooltip="Mở trình xem nhật ký ứng dụng thời gian thực (Live Log Viewer)",
-                ),
-                ft.Container(
-                    content=ft.Text("v0.1.0-alpha", size=10, color="#6b7280"),
-                    padding=pad(all_=10),
-                    alignment=ft.Alignment(0, 0),
-                ),
-            ],
-            spacing=4,
-            expand=True,
-        ),
-        bgcolor=BG_SIDEBAR,
-        width=210,
-    )
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ── MAIN APP ──────────────────────────────────────────────────────────────────
@@ -4278,11 +3954,10 @@ def main(page: ft.Page) -> None:
     page.theme_mode = ft.ThemeMode.LIGHT
     page.bgcolor    = BG_PAGE
     page.padding    = 0
-    page.fonts      = {
-        "Inter": "https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiA.woff2"
-    }
-    page.theme      = ft.Theme(font_family="Inter")
-    
+    page.data = {"audio_player": PageAudioPlayer(page)}
+    # Roboto is bundled with the Flet client and works without a font CDN.
+    page.theme = ft.Theme(font_family="Roboto")
+
     # Cửa sổ mặc định
     page.window.width      = 1240
     page.window.height     = 780
@@ -4324,7 +3999,7 @@ def main(page: ft.Page) -> None:
 
     content_area = ft.Container(
         expand=True,
-        padding=pad(all_=36),
+        padding=pad(all_=20 if page.width and page.width < 1000 else 36),
         bgcolor=BG_PAGE,
     )
 
@@ -4333,28 +4008,38 @@ def main(page: ft.Page) -> None:
     def handle_open_logs():
         show_log_viewer_dialog(page)
 
+    def make_sidebar(route):
+        return build_sidebar(route, navigate, on_open_logs=handle_open_logs,
+                             compact=bool(page.width and page.width < 1000))
+
+    def on_resize(e=None):
+        layout.controls[0] = make_sidebar(state["route"])
+        content_area.padding = pad(all_=20 if page.width and page.width < 1000 else 36)
+        page.update()
+
+    page.on_resize = on_resize
+
     # Trả về màn hình tương ứng
     def navigate(route: str) -> None:
         page.on_keyboard_event = None
         if nav_state["locked"]:
-            page.snack_bar = ft.SnackBar(
+            page.show_dialog(ft.SnackBar(
                 ft.Text("🔒 AI đang tạo bài học. Vui lòng đợi hoàn thành!"),
                 bgcolor="#991b1b"
-            )
-            page.snack_bar.open = True
+            ))
             page.update()
             return
 
         logger.info(f"Chuyển màn hình: {route}")
         state["route"] = route
-        layout.controls[0] = build_sidebar(route, navigate, on_open_logs=handle_open_logs)
+        layout.controls[0] = make_sidebar(route)
 
         if route == "dashboard":
             try:
                 apply_daily_score_decay()
             except Exception:
                 pass
-            content_area.content = build_dashboard(page, navigate)
+            content_area.content = build_dashboard(page, navigate, show_vocab_list_dialog)
         elif route == "lessons":
             content_area.content = build_lessons_screen(page, start_active_session, open_lesson_editor)
         elif route == "random":
@@ -4395,12 +4080,12 @@ def main(page: ft.Page) -> None:
 
     # Mặc định mở dashboard
     layout.controls = [
-        build_sidebar("dashboard", navigate, on_open_logs=handle_open_logs),
+        make_sidebar("dashboard"),
         ft.Container(width=3, bgcolor=TEXT_DARK),
         content_area,
     ]
     
-    content_area.content = build_dashboard(page, navigate)
+    content_area.content = build_dashboard(page, navigate, show_vocab_list_dialog)
     
     page.add(layout)
 
